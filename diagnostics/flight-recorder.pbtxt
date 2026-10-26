@@ -1,0 +1,28 @@
+# Opt-in flight recorder: 64 MiB ring, stop five seconds after ahd-stop trigger.
+# No frames, audio, or video payloads. Automatically expires after 24 hours.
+buffers { size_kb: 65536 fill_policy: RING_BUFFER }
+trigger_config {
+  trigger_mode: STOP_TRACING
+  trigger_timeout_ms: 86400000
+  triggers { name: "ahd-stop" stop_delay_ms: 5000 }
+}
+data_sources {
+  config {
+    name: "linux.ftrace"
+    ftrace_config {
+      ftrace_events: "sched/sched_switch"
+      ftrace_events: "sched/sched_wakeup"
+      ftrace_events: "power/cpu_frequency"
+      atrace_categories: "gfx"
+      atrace_categories: "view"
+      atrace_categories: "camera"
+      atrace_categories: "video"
+      atrace_apps: "io.github.ahdcamera"
+      atrace_apps: "io.github.ahdcamera.debug"
+      atrace_apps: "io.github.ahdcamera.rockchip"
+      atrace_apps: "io.github.ahdcamera.rockchip.debug"
+    }
+  }
+}
+data_sources { config { name: "linux.process_stats" process_stats_config { scan_all_processes_on_start: true proc_stats_poll_ms: 10000 } } }
+data_sources { config { name: "linux.sys_stats" sys_stats_config { meminfo_period_ms: 10000 stat_period_ms: 10000 stat_counters: STAT_CPU_TIMES } } }

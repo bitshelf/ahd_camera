@@ -1,0 +1,21 @@
+.gradle/
+.tooling/*
+!.tooling/.find-ignore
+local.properties
+**/build/
+*.jks
+*.keystore
+.idea/
+captures/
+target/*
+!target/.find-ignore
+app/src/rockchip/jniLibs/
+dist/
+
+# Local AI development skills and upstream Git checkout.
+/.agents/
+
+# Local checkout of official Android skills.
+/skills/
+
+/app/src/main/jniLibs/

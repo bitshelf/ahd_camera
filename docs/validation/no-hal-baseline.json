@@ -1,0 +1,86 @@
+{
+  "host_date": "2026-10-27",
+  "device": "205708b9e02cbaac",
+  "android_version": 15,
+  "note": "Device wall clock is incorrect. Enumeration is not a preview acceptance test. Experimental runtime results are historical only.",
+  "results": {
+    "experimental_runtime": {
+      "package": "io.github.ahdcamera.debug",
+      "uid": 10100,
+      "camera_permission_granted": true,
+      "camera1_count": 4,
+      "camera1_error": "",
+      "camera2_ids": [
+        "100",
+        "101",
+        "102",
+        "103"
+      ],
+      "camera2_error": "",
+      "scope": "Enumeration diagnostic only; not a preview acceptance test"
+    },
+    "original_runtime": {
+      "package": "io.github.ahdcamera.debug",
+      "uid": 10100,
+      "camera_permission_granted": true,
+      "camera1_count": 0,
+      "camera1_error": "",
+      "camera2_ids": [],
+      "camera2_error": "",
+      "scope": "Enumeration diagnostic only; not a preview acceptance test"
+    },
+    "rust_native_original_runtime": {
+      "package": "io.github.ahdcamera.debug",
+      "uid": 10100,
+      "camera_permission_granted": true,
+      "camera1_count": 0,
+      "camera1_error": "",
+      "camera2_ids": [],
+      "camera2_error": "",
+      "scope": "Enumeration diagnostic only; not a preview acceptance test"
+    },
+    "kotlin_original_runtime": {
+      "package": "io.github.ahdcamera.debug",
+      "uid": 10100,
+      "camera_permission_granted": true,
+      "camera1_count": 0,
+      "camera1_error": "",
+      "camera2_ids": [],
+      "camera2_error": "",
+      "scope": "Enumeration diagnostic only; not a preview acceptance test"
+    }
+  },
+  "restore": {
+    "device_library_sha256": "8a8e7bb879f0a12714c2d4bf3ff24d516ed193e61935b362c593cd9e9a1c0ffb",
+    "provider_library_sha256": "ef9c908c8f915aa50e1a39a5b44259528ec5df46dbd04864b7e5621c39c829b0",
+    "config_sha256": "01ccc96720865583b77f4448162852f025ddd31c332d054999c77e0ee6d94808",
+    "removed_vendor_bind_layers": [
+      1,
+      2,
+      2
+    ],
+    "flashed": false
+  },
+  "reference_apk": {
+    "package": "com.example.cam",
+    "target_sdk": 23,
+    "installation": "Targeted --bypass-low-target-sdk-block after Android 15 rejected the installation. No global policy changes.",
+    "camera_permission_granted": true,
+    "result": "Activity running with no preview after dismissing old-target warning; CameraService reports zero devices.",
+    "removed_after_test": true
+  },
+  "apk_sha256": {
+    "Rust": "3aa148bad196dec424cef7ace290447c3d8c44541b27a8dedc1c830223881d2f",
+    "Kotlin": "3c4ddd380d71d29f3200aaa29ef0743e9e55cbaef6c287a28dd2ebe2427c842f"
+  },
+  "build_validation": {
+    "per_branch_unit_tests": 5,
+    "failures": 0,
+    "tasks": [
+      "testDebugUnitTest",
+      "lintDebug",
+      "assembleDebug"
+    ],
+    "ui_live_preview_verified": false
+  }
+}

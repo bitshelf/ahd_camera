@@ -1,0 +1,122 @@
+// Android 15 BSP build. Android Studio uses the same sources via build.gradle.kts.
+package {
+    default_applicable_licenses: ["ahd_camera_license"],
+}
+license {
+    name: "ahd_camera_license",
+    license_kinds: ["SPDX-license-identifier-Apache-2.0"],
+    license_text: ["LICENSE"],
+}
+
+rust_defaults {
+    name: "ahd_rust_defaults",
+    edition: "2021",
+    flags: ["--cfg=soong"],
+    compile_multilib: "64",
+    prefer_rlib: true,
+}
+rust_library_rlib {
+    name: "libahd_core",
+    crate_name: "ahd_core",
+    defaults: ["ahd_rust_defaults"],
+    srcs: ["crates/ahd-core/src/lib.rs"],
+}
+rust_library_rlib {
+    name: "libahd_v4l2",
+    crate_name: "ahd_v4l2",
+    defaults: ["ahd_rust_defaults"],
+    srcs: ["crates/ahd-v4l2/src/lib.rs"],
+    rustlibs: ["libahd_core", "liblibc"],
+}
+rust_binary {
+    name: "ahd-v4l2-probe",
+    crate_name: "ahd_v4l2_probe",
+    defaults: ["ahd_rust_defaults"],
+    srcs: ["crates/ahd-v4l2/src/bin/ahd-v4l2-probe.rs"],
+    rustlibs: ["libahd_v4l2"],
+}
+
+rust_ffi_shared {
+    name: "libahd_android",
+    crate_name: "ahd_android",
+    defaults: ["ahd_rust_defaults"],
+    srcs: ["crates/ahd-android/src/lib.rs"],
+    rustlibs: ["libahd_core", "libahd_v4l2", "libjni", "liblibloading", "liblibc"],
+    shared_libs: ["libandroid", "libEGL", "libGLESv2", "libdl"],
+}
+
+java_binary_host {
+    name: "ahd_build_tool",
+    srcs: ["tools/src/AhdTools.kt"],
+    main_class: "io.github.ahdcamera.tools.AhdToolsKt",
+}
+genrule {
+    name: "ahd_aosp_manifest",
+    tools: ["ahd_build_tool"],
+    srcs: ["app/src/main/AndroidManifest.xml"],
+    out: ["AndroidManifest.xml"],
+    cmd: "$(location ahd_build_tool) manifest $(in) $(out)",
+}
+genrule {
+    name: "ahd_aosp_debug_manifest",
+    tools: ["ahd_build_tool"],
+    srcs: ["app/src/main/AndroidManifest.xml"],
+    out: ["AndroidManifest.xml"],
+    cmd: "$(location ahd_build_tool) manifest --debug $(in) $(out)",
+}
+java_defaults {
+    name: "ahd_app_defaults",
+    srcs: ["app/src/main/java/**/*.kt"],
+    resource_dirs: ["app/src/main/res"],
+    sdk_version: "current",
+    min_sdk_version: "31",
+    target_sdk_version: "35",
+    java_version: "17",
+    compile_multilib: "64",
+    jni_libs: ["libahd_android"],
+    jni_uses_platform_apis: true,
+    use_embedded_native_libs: true,
+    static_libs: [
+        "androidx.activity_activity-compose",
+        "androidx.core_core-ktx",
+        "androidx.compose.runtime_runtime",
+        "androidx.compose.material3_material3",
+        "androidx.compose.ui_ui",
+        "androidx.lifecycle_lifecycle-runtime-compose",
+        "androidx.lifecycle_lifecycle-viewmodel-compose",
+        "kotlinx_coroutines_android",
+    ],
+}
+android_app {
+    name: "AhdCamera",
+    certificate: "platform",
+    privileged: true,
+    system_ext_specific: true,
+    defaults: ["ahd_app_defaults"],
+    manifest: ":ahd_aosp_manifest",
+    required: ["ahd-capture-permissions.xml"],
+    optimize: {
+        enabled: true,
+        shrink: true,
+        proguard_flags_files: ["app/proguard-rules.pro"],
+    },
+}
+android_app {
+    name: "AhdCameraDebug",
+    certificate: "platform",
+    privileged: true,
+    system_ext_specific: true,
+    defaults: ["ahd_app_defaults"],
+    manifest: ":ahd_aosp_debug_manifest",
+    // Keep the source/resource namespace stable while the APK package has .debug.
+    aaptflags: ["--custom-package", "io.github.ahdcamera"],
+    optimize: { enabled: false },
+}
+
+// Installed with the release system App through its required dependency.
+prebuilt_etc {
+    name: "ahd-capture-permissions.xml",
+    src: "integration/permissions/ahd-capture-permissions.xml",
+    sub_dir: "permissions",
+    system_ext_specific: true,
+}

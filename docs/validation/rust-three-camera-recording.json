@@ -1,0 +1,76 @@
+{
+  "dut_serial": "205708b9e02cbaac",
+  "implementation": "Rust NDK Camera2",
+  "source": "three physical 1080p25 AHD cameras; temporary vendor HAL mounts; four capture buffers",
+  "dut_log_clock_is_incorrect": true,
+  "notes": [
+    "Exactly three new files after sequentially starting/stopping recording.",
+    "Whole-file averages include group reconfiguration gaps; capture was near 25 fps in steady state.",
+    "Does not establish 16+ physical camera throughput.",
+    "Pixel hash variation verifies changing decoded content; it does not measure lens-to-screen latency or input-frame loss."
+  ],
+  "files": [
+    {
+      "file": "AHD_100_1789531058326.mp4",
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "avg_frame_rate": "14598000/619907",
+          "duration": "103.317833",
+          "nb_read_frames": "2433"
+        }
+      ],
+      "decode_exit": 0,
+      "decode_errors": ""
+    },
+    {
+      "file": "AHD_101_1789531061637.mp4",
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "avg_frame_rate": "22014000/930943",
+          "duration": "103.438111",
+          "nb_read_frames": "2446"
+        }
+      ],
+      "decode_exit": 0,
+      "decode_errors": ""
+    },
+    {
+      "file": "AHD_102_1789531064826.mp4",
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "avg_frame_rate": "1985625/83891",
+          "duration": "104.397689",
+          "nb_read_frames": "2471"
+        }
+      ],
+      "decode_exit": 0,
+      "decode_errors": ""
+    }
+  ],
+  "pixel_samples_at_one_per_second": [
+    {
+      "file": "AHD_100_1789531058326.mp4",
+      "sampled_frames": 103,
+      "unique_pixel_hashes": 101
+    },
+    {
+      "file": "AHD_101_1789531061637.mp4",
+      "sampled_frames": 103,
+      "unique_pixel_hashes": 100
+    },
+    {
+      "file": "AHD_102_1789531064826.mp4",
+      "sampled_frames": 104,
+      "unique_pixel_hashes": 100
+    }
+  ]
+}

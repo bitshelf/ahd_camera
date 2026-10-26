@@ -1,0 +1,8 @@
+# Unified patch context includes a single space on empty context lines.
+# Check the underlying HAL diff separately; preserve the patch bytes verbatim.
+vendor/camera/patches/*.patch -whitespace
+integration/device/*.patch -whitespace
+
+integration/device/patches/*.patch -whitespace
+
+integration/patches/*.patch -whitespace
