@@ -134,4 +134,10 @@
     <string name="theme_light">Light</string>
     <string name="about_description">AHD Camera · Camera2 preview and recording · Kotlin.</string>
     <string name="add_camera_hint">Tap to add a camera</string>
+    <string name="dewarp_approximate">Approximate dewarp</string>
+    <string name="dewarp_notice">Uncalibrated lens model. Adjust visually; narrower output view crops more of the edges. Applies to preview and recording.</string>
+    <string name="dewarp_strength">Correction strength: %1$d%%</string>
+    <string name="dewarp_lens_fov">Lens horizontal angle: %1$d°</string>
+    <string name="dewarp_output_fov">Output horizontal view: %1$d°</string>
+    <string name="processed_frames">%1$s · GPU output frames</string>
 </resources>

@@ -151,6 +151,7 @@ private fun WallScreen(
     val rows by model.rows.collectAsStateWithLifecycle()
     val size by model.size.collectAsStateWithLifecycle()
     val fps by model.fps.collectAsStateWithLifecycle()
+    val dewarp by model.dewarp.collectAsStateWithLifecycle()
     val selectableFps by model.selectableFps.collectAsStateWithLifecycle()
     val showFps by model.showFps.collectAsStateWithLifecycle()
     val showResolution by model.showResolution.collectAsStateWithLifecycle()
@@ -223,6 +224,8 @@ private fun WallScreen(
                                         controlsVisible = controlsCameraId == camera.id, expanded = focused == camera.id,
                                         underGlobal = rowIndex == 0 && columnIndex == cols - 1,
                                         configurationLocked = recording.isNotEmpty(),
+                                        dewarp = dewarp[camera.id] ?: model.dewarpFor(camera.id),
+                                        onDewarp = { model.setDewarp(camera.id, it) },
                                         onToggleControls = { showSettings = false; controlsCameraId = if (controlsCameraId == camera.id) null else camera.id },
                                         recording = camera.id in recording, modifier = Modifier.weight(1f),
                                         onSizeChange = { model.setSize(camera.id, it) }, onFpsChange = { model.setFps(camera.id, it) },

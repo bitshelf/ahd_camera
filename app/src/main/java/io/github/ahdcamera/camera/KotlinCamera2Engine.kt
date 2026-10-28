@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import io.github.ahdcamera.R
 import io.github.ahdcamera.diagnostics.Diagnostics
 import io.github.ahdcamera.recording.SurfaceRecorder
+import io.github.ahdcamera.processing.GpuDewarp
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -26,7 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** Camera2 devices, sessions and callbacks share one executor; pixels stay in Surfaces. */
 class KotlinCamera2Engine(private val context: Context) : WallEngine {
-    private class Running(val target: PreviewTarget, val recorder: SurfaceRecorder?) {
+    private class Running(val target: PreviewTarget, val recorder: SurfaceRecorder?, val renderer: GpuDewarp) {
         var device: CameraDevice? = null
         var session: CameraCaptureSession? = null
         var frames = 0L
@@ -34,7 +35,7 @@ class KotlinCamera2Engine(private val context: Context) : WallEngine {
         var lastFrameNs = 0L
         var lastPollNs = SystemClock.elapsedRealtimeNanos()
         var lastFrames = 0L
-        val surfaces get() = listOf(target.surface) + listOfNotNull(recorder?.surface)
+        val surfaces get() = listOf(renderer.surface)
     }
 
     private val manager = context.getSystemService(CameraManager::class.java)
@@ -58,6 +59,11 @@ class KotlinCamera2Engine(private val context: Context) : WallEngine {
             // A restarted Provider can return the same IDs/Surfaces after an error.
             // An empty running group must be allowed to reopen those targets.
             if (targets == desired && (targets.isEmpty() || running.isNotEmpty() || pendingRestart != null)) return@execute
+            if (targets.size == desired.size && targets.zip(desired).all { (a, b) -> a.copy(dewarp = b.dewarp) == b } && running.size == targets.size) {
+                desired = targets
+                targets.forEach { running[it.id]?.renderer?.update(it.dewarp) }
+                return@execute
+            }
             desired = targets
             pendingRestart?.cancel(false)
             pendingRestart = null
@@ -78,6 +84,7 @@ class KotlinCamera2Engine(private val context: Context) : WallEngine {
             runCatching { it.session?.close() }.onFailure { e -> Diagnostics.error("camera2_session_close_failed", e) }
             runCatching { it.device?.close() }.onFailure { e -> Diagnostics.error("camera2_close_failed", e) }
         }
+        previous.forEach { runCatching { it.renderer.close() }.onFailure { e -> Diagnostics.error("dewarp_close_failed", e) } }
         // Disconnect every producer before encoder EOS and Surface release.
         previous.mapNotNull { it.recorder }.filter { it !in keepRecorders }.forEach { it.close() }
     }
@@ -117,7 +124,13 @@ class KotlinCamera2Engine(private val context: Context) : WallEngine {
                     context, target.id, target.size, requireNotNull(target.fpsRange).second,
                 ) { mutableMessages.value = it }
             }
-            targets.forEach { running[it.id] = Running(it, prepared[it.id]) }
+            targets.forEach { target ->
+                val renderer = GpuDewarp(target.size.width, target.size.height, target.surface,
+                    prepared[target.id]?.surface, target.dewarp, target.lifetime) { error ->
+                    if (!closed.get()) control.execute { if (current(epoch)) reject(error) }
+                }
+                running[target.id] = Running(target, prepared[target.id], renderer)
+            }
             if (targets.size > 1) {
                 val configurations = running.mapValues { (_, capture) ->
                     SessionConfiguration(SessionConfiguration.SESSION_REGULAR,
@@ -227,14 +240,15 @@ class KotlinCamera2Engine(private val context: Context) : WallEngine {
     private fun poll() {
         val now = SystemClock.elapsedRealtimeNanos()
         mutableStatus.value = running.mapValues { (_, capture) ->
-            val fps = (capture.frames - capture.lastFrames) * 1_000_000_000.0 / (now - capture.lastPollNs).coerceAtLeast(1)
-            capture.lastFrames = capture.frames
+            val frames = capture.renderer.renderedFrames
+            val fps = (frames - capture.lastFrames) * 1_000_000_000.0 / (now - capture.lastPollNs).coerceAtLeast(1)
+            capture.lastFrames = frames
             capture.lastPollNs = now
-            val age = capture.lastFrameNs.takeIf { it > 0 }?.let { (now - it) / 1_000_000f }
+            val age = capture.renderer.lastRenderNs.takeIf { it > 0 }?.let { (now - it) / 1_000_000f }
             TileStatus(
-                if (capture.frames > 0) context.getString(R.string.capture_callbacks, capture.target.size.toString())
+                if (frames > 0) context.getString(R.string.processed_frames, capture.target.size.toString())
                 else context.getString(R.string.waiting_first_frame),
-                fps.toFloat(), age, capture.failures, capture.frames > 0 && fps > 0,
+                fps.toFloat(), age, capture.failures, frames > 0 && fps > 0,
             )
         }.takeIf { it.isNotEmpty() } ?: mutableStatus.value
     }

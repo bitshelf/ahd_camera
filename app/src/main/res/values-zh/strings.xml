@@ -132,4 +132,10 @@
     <string name="theme_light">浅色</string>
     <string name="about_description">AHD Camera · 多路 Camera2 摄像头预览与录制。</string>
     <string name="add_camera_hint">点击添加摄像头</string>
+    <string name="dewarp_approximate">近似鱼眼矫正</string>
+    <string name="dewarp_notice">镜头尚未标定，请按画面调节；输出视野越小，边缘裁切越多。预览和录像同步矫正。</string>
+    <string name="dewarp_strength">矫正强度：%1$d%%</string>
+    <string name="dewarp_lens_fov">镜头水平视角：%1$d°</string>
+    <string name="dewarp_output_fov">输出水平视野：%1$d°</string>
+    <string name="processed_frames">%1$s · GPU 输出帧</string>
 </resources>

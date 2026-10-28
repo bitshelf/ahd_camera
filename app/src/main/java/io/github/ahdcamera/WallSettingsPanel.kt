@@ -161,6 +161,8 @@ internal fun CameraControlsPanel(
     size: io.github.ahdcamera.camera.StreamSize?, fps: Pair<Int, Int>?,
     sizes: List<io.github.ahdcamera.camera.StreamSize>, rates: List<Pair<Int, Int>>,
     locked: Boolean,
+    dewarp: io.github.ahdcamera.processing.DewarpSettings,
+    onDewarp: (io.github.ahdcamera.processing.DewarpSettings) -> Unit,
     modifier: Modifier = Modifier,
     onSize: (io.github.ahdcamera.camera.StreamSize) -> Unit, onFps: (Pair<Int, Int>) -> Unit,
     onClose: () -> Unit,
@@ -183,6 +185,21 @@ internal fun CameraControlsPanel(
                 when { it == null -> stringResource(R.string.reading_frame_rate)
                     it.first == it.second -> stringResource(R.string.frame_rate, it.second)
                     else -> stringResource(R.string.frame_rate_range, it.first, it.second) }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = WallPalette.Border)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.dewarp_approximate), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Switch(dewarp.enabled, { onDewarp(dewarp.copy(enabled = it)) }, enabled = !locked)
+            }
+            if (dewarp.enabled) {
+                Text(stringResource(R.string.dewarp_notice), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.dewarp_strength, (dewarp.strength * 100).toInt()))
+                Slider(dewarp.strength, { onDewarp(dewarp.copy(strength = it)) }, enabled = !locked)
+                Text(stringResource(R.string.dewarp_lens_fov, dewarp.lensFov.toInt()))
+                Slider(dewarp.lensFov, { onDewarp(dewarp.copy(lensFov = it)) }, valueRange = 100f..220f, enabled = !locked)
+                Text(stringResource(R.string.dewarp_output_fov, dewarp.outputFov.toInt()))
+                Slider(dewarp.outputFov, { onDewarp(dewarp.copy(outputFov = it)) }, valueRange = 50f..120f, enabled = !locked)
             }
 
         }

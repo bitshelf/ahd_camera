@@ -6,6 +6,7 @@ import android.view.Surface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.ahdcamera.camera.*
+import io.github.ahdcamera.processing.DewarpSettings
 import io.github.ahdcamera.diagnostics.Diagnostics
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,23 @@ class WallViewModel(application: Application) : AndroidViewModel(application) {
     val selectableFps = mutableSelectableFps.asStateFlow()
     private val mutableRecording = MutableStateFlow(emptySet<String>())
     val recording = mutableRecording.asStateFlow()
+    private val mutableDewarp = MutableStateFlow<Map<String, DewarpSettings>>(emptyMap())
+    val dewarp = mutableDewarp.asStateFlow()
+    fun dewarpFor(id: String): DewarpSettings = dewarp.value[id] ?: DewarpSettings(
+        enabled = prefs.getBoolean("dewarp.enabled.$id", true),
+        strength = prefs.getFloat("dewarp.strength.$id", 1f),
+        lensFov = prefs.getFloat("dewarp.lens.$id", 180f),
+        outputFov = prefs.getFloat("dewarp.output.$id", 100f),
+    ).validated()
+    fun setDewarp(id: String, value: DewarpSettings) {
+        if (recording.value.isNotEmpty()) return
+        val valid = value.validated()
+        mutableDewarp.value = dewarp.value + (id to valid)
+        prefs.edit().putBoolean("dewarp.enabled.$id", valid.enabled)
+            .putFloat("dewarp.strength.$id", valid.strength).putFloat("dewarp.lens.$id", valid.lensFov)
+            .putFloat("dewarp.output.$id", valid.outputFov).apply()
+        applyTargets()
+    }
     private val surfaces = mutableMapOf<String, PreviewTarget>()
     private var resumed = false
     private var refreshJob: Job? = null
@@ -176,7 +194,7 @@ class WallViewModel(application: Application) : AndroidViewModel(application) {
         val targets = if (resumed) selected.value.mapNotNull { id ->
             val currentSize = size.value[id] ?: return@mapNotNull null
             val currentFps = fps.value[id] ?: return@mapNotNull null
-            surfaces[id]?.takeIf { it.size == currentSize }?.copy(recording = id in recording.value, fpsRange = currentFps)
+            surfaces[id]?.takeIf { it.size == currentSize }?.copy(recording = id in recording.value, fpsRange = currentFps, dewarp = dewarpFor(id))
         } else emptyList()
         Trace.setCounter("ahd.preview_streams", targets.size.toLong())
         Trace.setCounter("ahd.recording_streams", recording.value.size.toLong())

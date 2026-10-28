@@ -36,6 +36,8 @@ internal fun CameraTile(
     expanded: Boolean = false,
     underGlobal: Boolean = false,
     configurationLocked: Boolean,
+    dewarp: io.github.ahdcamera.processing.DewarpSettings,
+    onDewarp: (io.github.ahdcamera.processing.DewarpSettings) -> Unit,
     onToggleControls: () -> Unit,
     recording: Boolean,
     modifier: Modifier,
@@ -62,7 +64,7 @@ internal fun CameraTile(
             }
             CameraControlsPanel(
                 size, fps, camera.sizes.distinct().filter { StreamPolicy.supportedFps(listOf(camera), it).isNotEmpty() }.sortedByDescending { it.area },
-                fpsOptions, configurationLocked,
+                fpsOptions, configurationLocked, dewarp, onDewarp,
                 modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = if (underGlobal) 116.dp else 58.dp, end = 8.dp, start = 8.dp, bottom = 8.dp)
                     .widthIn(max = 366.dp).heightIn(max = (maxHeight - if (underGlobal) 132.dp else 74.dp).coerceAtLeast(40.dp)),
                 onSize = onSizeChange, onFps = onFpsChange, onClose = onToggleControls,
@@ -107,15 +109,16 @@ private fun CameraSurface(id: String, size: StreamSize, onAttach: (PreviewTarget
                 SurfaceView(context).apply {
                     holder.setFixedSize(size.width, size.height)
                     holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) = Unit
+                        private var lifetime = PreviewLifetime()
+                        override fun surfaceCreated(holder: SurfaceHolder) { lifetime = PreviewLifetime(); tag = lifetime }
                         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                            onAttach(PreviewTarget(id, holder.surface, size))
+                            onAttach(PreviewTarget(id, holder.surface, size, lifetime = lifetime))
                         }
-                        override fun surfaceDestroyed(holder: SurfaceHolder) { onDetach(id, holder.surface) }
+                        override fun surfaceDestroyed(holder: SurfaceHolder) { lifetime.invalidate(); onDetach(id, holder.surface) }
                     })
                 }
             },
-            onRelease = { view -> onDetach(id, view.holder.surface) },
+            onRelease = { view -> (view.tag as? PreviewLifetime)?.invalidate(); onDetach(id, view.holder.surface) },
         )
     }
 }
