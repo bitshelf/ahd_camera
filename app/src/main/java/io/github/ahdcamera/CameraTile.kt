@@ -33,6 +33,7 @@ internal fun CameraTile(
     showFps: Boolean,
     showResolution: Boolean,
     controlsVisible: Boolean,
+    revealControlsOnly: Boolean = false,
     expanded: Boolean = false,
     underGlobal: Boolean = false,
     configurationLocked: Boolean,
@@ -50,12 +51,13 @@ internal fun CameraTile(
 ) {
     BoxWithConstraints(modifier.fillMaxHeight().clipToBounds().background(Color.Black)
         .border(if (controlsVisible) 2.dp else 1.dp, if (recording) Color(0xFFFF6C74) else if (controlsVisible) WallPalette.ControlAccent else Color(0x1F99BDC2))
-        .clickable(onClickLabel = stringResource(R.string.camera_controls, camera.id), onClick = onToggleControls)) {
+        .clickable(onClickLabel = if (revealControlsOnly) stringResource(R.string.show_controls)
+            else stringResource(R.string.camera_controls, camera.id), onClick = onToggleControls)) {
         val compact = maxHeight < 140.dp || maxWidth < 180.dp
         if (size != null) CameraPreview(camera.id, size, onAttach, onDetach, status.streaming, Modifier.fillMaxSize())
         if (compact) Box(Modifier.fillMaxSize().clickable {
             onToggleControls()
-            if (!configurationLocked) onFocus()
+            if (!configurationLocked && !revealControlsOnly) onFocus()
         })
         if (controlsVisible && !compact) {
             Row(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = if (underGlobal) 68.dp else 10.dp, end = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -66,7 +68,7 @@ internal fun CameraTile(
                 size, fps, camera.sizes.distinct().filter { StreamPolicy.supportedFps(listOf(camera), it).isNotEmpty() }.sortedByDescending { it.area },
                 fpsOptions, configurationLocked, dewarp, onDewarp,
                 modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = if (underGlobal) 116.dp else 58.dp, end = 8.dp, start = 8.dp, bottom = 8.dp)
-                    .widthIn(max = 366.dp).heightIn(max = (maxHeight - if (underGlobal) 132.dp else 74.dp).coerceAtLeast(40.dp)),
+                    .widthIn(max = 296.dp).heightIn(max = (maxHeight - if (underGlobal) 132.dp else 74.dp).coerceAtLeast(40.dp)),
                 onSize = onSizeChange, onFps = onFpsChange, onClose = onToggleControls,
             )
         }
@@ -99,15 +101,13 @@ private fun CameraPreview(id: String, size: StreamSize, onAttach: (PreviewTarget
 
 @Composable
 private fun CameraSurface(id: String, size: StreamSize, onAttach: (PreviewTarget) -> Unit, onDetach: (String, Surface) -> Unit, modifier: Modifier) {
-    BoxWithConstraints(modifier.clipToBounds(), contentAlignment = Alignment.Center) {
-        // Center crop: preserve aspect ratio and fill the tile, including non-16:9 grids.
-        val aspect = size.width.toFloat() / size.height
-        val contentWidth = maxOf(maxWidth, maxHeight * aspect)
+    Box(modifier.clipToBounds()) {
+        // SurfaceView has a separate compositor layer. Keep that layer inside
+        // the tile; the GPU performs center crop instead of enlarging the View.
         AndroidView(
-            modifier = Modifier.requiredSize(contentWidth, contentWidth / aspect),
+            modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 SurfaceView(context).apply {
-                    holder.setFixedSize(size.width, size.height)
                     holder.addCallback(object : SurfaceHolder.Callback {
                         private var lifetime = PreviewLifetime()
                         override fun surfaceCreated(holder: SurfaceHolder) { lifetime = PreviewLifetime(); tag = lifetime }

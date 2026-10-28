@@ -140,4 +140,7 @@
     <string name="dewarp_lens_fov">Lens horizontal angle: %1$d°</string>
     <string name="dewarp_output_fov">Output horizontal view: %1$d°</string>
     <string name="processed_frames">%1$s · GPU output frames</string>
+    <string name="show_controls">Show controls</string>
+    <string name="dewarp_adjustment">Adjust correction</string>
+    <string name="hide_dewarp_adjustment">Hide correction adjustments</string>
 </resources>

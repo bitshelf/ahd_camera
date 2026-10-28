@@ -138,4 +138,7 @@
     <string name="dewarp_lens_fov">镜头水平视角：%1$d°</string>
     <string name="dewarp_output_fov">输出水平视野：%1$d°</string>
     <string name="processed_frames">%1$s · GPU 输出帧</string>
+    <string name="show_controls">显示控制按钮</string>
+    <string name="dewarp_adjustment">调节矫正</string>
+    <string name="hide_dewarp_adjustment">收起矫正调节</string>
 </resources>

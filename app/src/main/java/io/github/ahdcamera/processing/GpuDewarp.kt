@@ -58,6 +58,8 @@ class GpuDewarp(
     private var uv = 0
     private var transform = 0
     private var params = 0
+    private var crop = 0
+    private val windowSize = IntArray(2)
 
     init {
         val done = CountDownLatch(1)
@@ -112,6 +114,7 @@ class GpuDewarp(
         uv = GLES20.glGetAttribLocation(program,"aUv")
         transform = GLES20.glGetUniformLocation(program,"uTransform")
         params = GLES20.glGetUniformLocation(program,"uParams")
+        crop = GLES20.glGetUniformLocation(program,"uCrop")
         input = SurfaceTexture(texture).apply {
             setDefaultBufferSize(width,height)
             setOnFrameAvailableListener({ drawFrame() },handler)
@@ -151,7 +154,12 @@ class GpuDewarp(
 
     private fun render(window: EGLSurface, value: DewarpSettings, timestamp: Long, recording: Boolean) {
         makeCurrent(window)
-        GLES20.glViewport(0,0,width,height)
+        // Preview follows the actual tile-sized Surface; encoder dimensions
+        // remain its configured capture size. Never draw an oversized View.
+        check(EGL14.eglQuerySurface(display,window,EGL14.EGL_WIDTH,windowSize,0))
+        check(EGL14.eglQuerySurface(display,window,EGL14.EGL_HEIGHT,windowSize,1))
+        check(windowSize[0] > 0 && windowSize[1] > 0)
+        GLES20.glViewport(0,0,windowSize[0],windowSize[1])
         GLES20.glUseProgram(program)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,texture)
@@ -160,6 +168,9 @@ class GpuDewarp(
         GLES20.glUniform4f(params,if(value.enabled) value.strength else 0f,
             (2.0 * tan(value.outputFov * PI / 360.0)).toFloat(),
             (value.lensFov * PI / 180.0).toFloat(),width.toFloat()/height)
+        val sourceAspect = width.toFloat() / height
+        val outputAspect = windowSize[0].toFloat() / windowSize[1]
+        GLES20.glUniform2f(crop, minOf(1f,outputAspect/sourceAspect), minOf(1f,sourceAspect/outputAspect))
         vertices.position(0); GLES20.glVertexAttribPointer(position,2,GLES20.GL_FLOAT,false,16,vertices)
         vertices.position(2); GLES20.glVertexAttribPointer(uv,2,GLES20.GL_FLOAT,false,16,vertices)
         GLES20.glEnableVertexAttribArray(position); GLES20.glEnableVertexAttribArray(uv)
@@ -238,13 +249,15 @@ class GpuDewarp(
             uniform samplerExternalOES uTexture;
             uniform mat4 uTransform;
             uniform vec4 uParams;
+            uniform vec2 uCrop;
             varying vec2 vUv;
             void main() {
-                vec2 ray=(vUv-0.5)*vec2(uParams.y,uParams.y/uParams.w);
+                vec2 rectUv=0.5+(vUv-0.5)*uCrop;
+                vec2 ray=(rectUv-0.5)*vec2(uParams.y,uParams.y/uParams.w);
                 float r=length(ray);
                 float scale=r>0.00001 ? atan(r)/r/uParams.z : 1.0/uParams.z;
                 vec2 mapped=0.5+ray*scale*vec2(1.0,uParams.w);
-                vec2 sampleUv=mix(vUv,mapped,uParams.x);
+                vec2 sampleUv=mix(rectUv,mapped,uParams.x);
                 if(any(lessThan(sampleUv,vec2(0.0))) || any(greaterThan(sampleUv,vec2(1.0)))) {
                     gl_FragColor=vec4(0.0,0.0,0.0,1.0);
                 } else {

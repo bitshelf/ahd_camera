@@ -345,7 +345,24 @@
          } else {
              mExifMake = card;
              mExifModel = card;
-@@ -341,59 +342,13 @@
+@@ -214,12 +215,11 @@
+ }
+ 
+ void ExternalCameraDeviceSession::initOutputThread() {
+-    // Grab a shared_ptr to 'this' from ndk::SharedRefBase::ref()
+-    std::shared_ptr<ExternalCameraDeviceSession> thiz = ref<ExternalCameraDeviceSession>();
+-
+-    mBufferRequestThread = std::make_shared<BufferRequestThread>(/*parent=*/thiz, mCallback);
++    // Worker lifetimes are bounded by closeImpl; they never own the session.
++
++    mBufferRequestThread = std::make_shared<BufferRequestThread>(/*parent=*/this, mCallback);
+     mBufferRequestThread->run();
+-    mOutputThread = std::make_shared<OutputThread>(/*parent=*/thiz, mCroppingType,
++    mOutputThread = std::make_shared<OutputThread>(/*parent=*/this, mCroppingType,
+                                                    mCameraCharacteristics, mBufferRequestThread);
+ }
+ 
+@@ -341,59 +341,13 @@
          }
      }
  
@@ -412,7 +429,7 @@
  
      if (configureV4l2StreamLocked(v4l2Fmt) != 0) {
          ALOGE("V4L configuration failed!, format:%c%c%c%c, w %d, h %d", v4l2Fmt.fourcc & 0xFF,
-@@ -1060,7 +1015,7 @@
+@@ -1060,7 +1014,7 @@
      }
  
      // VIDIOC_S_FMT w/h/fmt
@@ -421,7 +438,7 @@
      fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
      fmt.fmt.pix.width = v4l2Fmt.width;
      fmt.fmt.pix.height = v4l2Fmt.height;
-@@ -1069,7 +1024,7 @@
+@@ -1069,7 +1023,7 @@
      {
          int numAttempt = 0;
          do {
@@ -430,7 +447,7 @@
              if (numAttempt == MAX_RETRY) {
                  break;
              }
-@@ -1134,6 +1089,7 @@
+@@ -1134,6 +1088,7 @@
          return fpsRet;
      }
  
@@ -438,7 +455,7 @@
      uint32_t v4lBufferCount = (fps >= kDefaultFps) ? mCfg.numVideoBuffers : mCfg.numStillBuffers;
  
      // VIDIOC_REQBUFS: create buffers
-@@ -1141,7 +1097,7 @@
+@@ -1141,7 +1096,7 @@
      req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
      req_buffers.memory = V4L2_MEMORY_MMAP;
      req_buffers.count = v4lBufferCount;
@@ -447,7 +464,7 @@
          ALOGE("%s: VIDIOC_REQBUFS failed: %s", __FUNCTION__, strerror(errno));
          return -errno;
      }
-@@ -1160,12 +1116,12 @@
+@@ -1160,12 +1115,12 @@
          v4l2_buffer buffer = {
                  .index = i, .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
  
@@ -462,7 +479,7 @@
              ALOGE("%s: QBUF %d failed: %s", __FUNCTION__, i, strerror(errno));
              return -errno;
          }
-@@ -1176,7 +1132,7 @@
+@@ -1176,7 +1131,7 @@
          v4l2_buf_type capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
          int numAttempt = 0;
          do {
@@ -471,7 +488,7 @@
              if (numAttempt == MAX_RETRY) {
                  break;
              }
-@@ -1197,12 +1153,12 @@
+@@ -1197,12 +1152,12 @@
          v4l2_buffer buffer{};
          buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
          buffer.memory = V4L2_MEMORY_MMAP;
@@ -486,7 +503,7 @@
              ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__, buffer.index, strerror(errno));
              return -errno;
          }
-@@ -1236,7 +1192,7 @@
+@@ -1236,7 +1191,7 @@
      v4l2_buffer buffer{};
      buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
      buffer.memory = V4L2_MEMORY_MMAP;
@@ -495,7 +512,7 @@
          ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
          return ret;
      }
-@@ -1272,9 +1228,11 @@
+@@ -1272,9 +1227,11 @@
          mNumDequeuedV4l2Buffers++;
      }
  
@@ -508,7 +525,7 @@
  }
  
  void ExternalCameraDeviceSession::enqueueV4l2Frame(const std::shared_ptr<V4L2Frame>& frame) {
-@@ -1285,7 +1243,7 @@
+@@ -1285,7 +1242,7 @@
      buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
      buffer.memory = V4L2_MEMORY_MMAP;
      buffer.index = frame->mBufferIndex;
@@ -517,7 +534,7 @@
          ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__, frame->mBufferIndex, strerror(errno));
          return;
      }
-@@ -1424,7 +1382,7 @@
+@@ -1424,7 +1381,7 @@
  
      // VIDIOC_STREAMOFF
      v4l2_buf_type capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -526,7 +543,7 @@
          ALOGE("%s: STREAMOFF failed: %s", __FUNCTION__, strerror(errno));
          return -errno;
      }
-@@ -1434,7 +1392,7 @@
+@@ -1434,7 +1391,7 @@
      req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
      req_buffers.memory = V4L2_MEMORY_MMAP;
      req_buffers.count = 0;
@@ -535,7 +552,7 @@
          ALOGE("%s: REQBUFS failed: %s", __FUNCTION__, strerror(errno));
          return -errno;
      }
-@@ -1447,10 +1405,11 @@
+@@ -1447,10 +1404,11 @@
      // VIDIOC_G_PARM/VIDIOC_S_PARM: set fps
      v4l2_streamparm streamparm = {.type = V4L2_BUF_TYPE_VIDEO_CAPTURE};
      // The following line checks that the driver knows about framerate get/set.
@@ -550,7 +567,7 @@
          }
          return -errno;
      }
-@@ -1465,9 +1424,9 @@
+@@ -1465,9 +1423,9 @@
      streamparm.parm.capture.timeperframe.numerator = kFrameRatePrecision;
      streamparm.parm.capture.timeperframe.denominator = (fps * kFrameRatePrecision);
  
@@ -562,7 +579,70 @@
      }
  
      double retFps = streamparm.parm.capture.timeperframe.denominator /
-@@ -2740,7 +2699,7 @@
+@@ -1923,7 +1881,7 @@
+ 
+ // Start ExternalCameraDeviceSession::BufferRequestThread functions
+ ExternalCameraDeviceSession::BufferRequestThread::BufferRequestThread(
+-        std::weak_ptr<OutputThreadInterface> parent,
++        OutputThreadInterface* parent,
+         std::shared_ptr<ICameraDeviceCallback> callbacks)
+     : mParent(parent), mCallbacks(callbacks) {}
+ 
+@@ -2036,7 +1994,7 @@
+             return false;
+         }
+ 
+-        auto parent = mParent.lock();
++        auto parent = mParent;
+         if (parent == nullptr) {
+             ALOGE("%s: session has been disconnected!", __FUNCTION__);
+             mBufferReqs.clear();
+@@ -2123,7 +2081,7 @@
+ // Start ExternalCameraDeviceSession::OutputThread functions
+ 
+ ExternalCameraDeviceSession::OutputThread::OutputThread(
+-        std::weak_ptr<OutputThreadInterface> parent, CroppingType ct,
++        OutputThreadInterface* parent, CroppingType ct,
+         const common::V1_0::helper::CameraMetadata& chars,
+         std::shared_ptr<BufferRequestThread> bufReqThread)
+     : mParent(parent),
+@@ -2223,7 +2181,7 @@
+ 
+ void ExternalCameraDeviceSession::OutputThread::flush() {
+     ATRACE_CALL();
+-    auto parent = mParent.lock();
++    auto parent = mParent;
+     if (parent == nullptr) {
+         ALOGE("%s: session has been disconnected!", __FUNCTION__);
+         return;
+@@ -2270,7 +2228,7 @@
+ std::list<std::shared_ptr<HalRequest>>
+ ExternalCameraDeviceSession::OutputThread::switchToOffline() {
+     ATRACE_CALL();
+-    auto parent = mParent.lock();
++    auto parent = mParent;
+     if (parent == nullptr) {
+         ALOGE("%s: session has been disconnected!", __FUNCTION__);
+         return {};
+@@ -2558,7 +2516,7 @@
+ 
+         return 1;
+     };
+-    auto parent = mParent.lock();
++    auto parent = mParent;
+     if (parent == nullptr) {
+         ALOGE("%s: session has been disconnected!", __FUNCTION__);
+         return 1;
+@@ -2718,7 +2676,7 @@
+ 
+ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
+     std::shared_ptr<HalRequest> req;
+-    auto parent = mParent.lock();
++    auto parent = mParent;
+     if (parent == nullptr) {
+         ALOGE("%s: session has been disconnected!", __FUNCTION__);
+         return false;
+@@ -2740,7 +2698,7 @@
          return false;
      };
  
@@ -571,7 +651,7 @@
          return onDeviceError("%s: do not support V4L2 format %c%c%c%c", __FUNCTION__,
                               req->frameIn->mFourcc & 0xFF, (req->frameIn->mFourcc >> 8) & 0xFF,
                               (req->frameIn->mFourcc >> 16) & 0xFF,
-@@ -2787,8 +2746,26 @@
+@@ -2787,8 +2745,26 @@
          }
      }
  
@@ -621,7 +701,7 @@
  using ::android::hardware::graphics::mapper::V2_0::YCbCrLayout;
  using ::ndk::ScopedAStatus;
  
-@@ -122,7 +122,7 @@
+@@ -122,11 +122,11 @@
  
      static const int kMaxProcessedStream = 2;
      static const int kMaxStallStream = 1;
@@ -630,6 +710,40 @@
  
      class BufferRequestThread : public SimpleThread {
        public:
+-        BufferRequestThread(std::weak_ptr<OutputThreadInterface> parent,
++        BufferRequestThread(OutputThreadInterface* parent,
+                             std::shared_ptr<ICameraDeviceCallback> callbacks);
+ 
+         int requestBufferStart(const std::vector<HalStreamBuffer>&);
+@@ -138,7 +138,8 @@
+       private:
+         void waitForNextRequest();
+ 
+-        const std::weak_ptr<OutputThreadInterface> mParent;
++        // Borrowed from the owning session; its destructor joins workers before freeing state.
++        OutputThreadInterface* const mParent;
+         const std::shared_ptr<ICameraDeviceCallback> mCallbacks;
+ 
+         std::mutex mLock;
+@@ -163,7 +164,7 @@
+ 
+     class OutputThread : public SimpleThread {
+       public:
+-        OutputThread(std::weak_ptr<OutputThreadInterface> parent, CroppingType,
++        OutputThread(OutputThreadInterface* parent, CroppingType,
+                      const common::V1_0::helper::CameraMetadata&,
+                      std::shared_ptr<BufferRequestThread> bufReqThread);
+         ~OutputThread();
+@@ -205,7 +206,8 @@
+ 
+         void clearIntermediateBuffers();
+ 
+-        const std::weak_ptr<OutputThreadInterface> mParent;
++        // Borrowed from the owning session; its destructor joins workers before freeing state.
++        OutputThreadInterface* const mParent;
+         const CroppingType mCroppingType;
+         const common::V1_0::helper::CameraMetadata mCameraCharacteristics;
+ 
 --- a/ExternalCameraOfflineSession.cpp
 +++ b/ExternalCameraOfflineSession.cpp
 @@ -14,7 +14,7 @@
@@ -650,7 +764,34 @@
  
  using ::aidl::android::hardware::camera::device::BufferStatus;
  using ::aidl::android::hardware::camera::device::ErrorMsg;
-@@ -389,7 +389,7 @@
+@@ -301,14 +301,13 @@
+         return;
+     }
+ 
+-    // Grab a shared_ptr to 'this' from ndk::SharedRefBase::ref()
+-    std::shared_ptr<ExternalCameraOfflineSession> thiz = ref<ExternalCameraOfflineSession>();
++    // close() joins workers before destroying the borrowed parent.
+ 
+     mBufferRequestThread = std::make_shared<ExternalCameraDeviceSession::BufferRequestThread>(
+-            /*parent=*/thiz, mCallback);
++            /*parent=*/this, mCallback);
+     mBufferRequestThread->run();
+ 
+-    mOutputThread = std::make_shared<OutputThread>(/*parent=*/thiz, mCroppingType, mChars,
++    mOutputThread = std::make_shared<OutputThread>(/*parent=*/this, mCroppingType, mChars,
+                                                    mBufferRequestThread, mOfflineReqs);
+ 
+     mOutputThread->setExifMakeModel(mExifMake, mExifModel);
+@@ -368,7 +367,7 @@
+ }
+ 
+ bool ExternalCameraOfflineSession::OutputThread::threadLoop() {
+-    auto parent = mParent.lock();
++    auto parent = mParent;
+     if (parent == nullptr) {
+         ALOGE("%s: session has been disconnected!", __FUNCTION__);
+         return false;
+@@ -389,7 +388,7 @@
          return false;
      };
  
@@ -659,7 +800,7 @@
          return onDeviceError("%s: do not support V4L2 format %c%c%c%c", __FUNCTION__,
                               req->frameIn->mFourcc & 0xFF, (req->frameIn->mFourcc >> 8) & 0xFF,
                               (req->frameIn->mFourcc >> 16) & 0xFF,
-@@ -410,6 +410,24 @@
+@@ -410,6 +409,24 @@
      if (req->frameIn->getData(&inData, &inDataSize) != 0) {
          lk.unlock();
          return onDeviceError("%s: V4L2 buffer map failed", __FUNCTION__);
@@ -695,6 +836,15 @@
  
  using ::aidl::android::hardware::camera::common::Status;
  using ::aidl::android::hardware::camera::device::BnCameraOfflineSession;
+@@ -78,7 +78,7 @@
+   private:
+     class OutputThread : public ExternalCameraDeviceSession::OutputThread {
+       public:
+-        OutputThread(std::weak_ptr<OutputThreadInterface> parent, CroppingType ct,
++        OutputThread(OutputThreadInterface* parent, CroppingType ct,
+                      const common::V1_0::helper::CameraMetadata& chars,
+                      std::shared_ptr<ExternalCameraDeviceSession::BufferRequestThread> bufReqThread,
+                      std::deque<std::shared_ptr<HalRequest>>& offlineReqs)
 --- a/ExternalCameraUtils.cpp
 +++ b/ExternalCameraUtils.cpp
 @@ -14,7 +14,7 @@

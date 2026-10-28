@@ -17,6 +17,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +34,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -42,6 +50,7 @@ import io.github.ahdcamera.diagnostics.Diagnostics
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val model: WallViewModel by viewModels()
@@ -171,6 +180,17 @@ private fun WallScreen(
     val currentPage = page.coerceIn(0, pageCount - 1)
     val visible = if (focused == null) cameras.drop(currentPage * capacity).take(capacity)
         else cameras.filter { it.id == focused }
+    var toolsVisible by remember { mutableStateOf(true) }
+    var toolsActivity by remember { mutableLongStateOf(0L) }
+    val toolsPinned = showSettings || controlsCameraId != null || visible.isEmpty() || !granted
+    val actionsVisible = toolsVisible || toolsPinned
+    LaunchedEffect(toolsActivity, toolsPinned) {
+        if (toolsPinned) toolsVisible = true
+        else {
+            delay(5_000)
+            toolsVisible = false
+        }
+    }
 
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message, exportStatus) {
@@ -180,7 +200,18 @@ private fun WallScreen(
     BackHandler(focused != null && !showSettings) { focused = null }
     BackHandler(controlsCameraId != null && !showSettings) { controlsCameraId = null }
     BackHandler(showSettings) { if (section != WallSection.Display) section = WallSection.Display else showSettings = false }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)
+        .pointerInput(Unit) {
+            // Observe without consuming the child's click. Preview taps decide
+            // whether to reveal tools or open parameters; panels keep tools pinned.
+            awaitPointerEventScope {
+                while (true) {
+                    if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press)
+                        toolsActivity++
+                }
+            }
+        }
+        .onPreviewKeyEvent { toolsActivity++; false }) {
         val panelWidth = (maxWidth - 26.dp).coerceAtMost(325.dp)
         val panelHeight = (maxHeight - 78.dp).coerceAtLeast(80.dp)
         when {
@@ -222,11 +253,19 @@ private fun WallScreen(
                                         fps = fps[camera.id]?.takeIf { it in selectableFps[camera.id].orEmpty() },
                                         fpsOptions = selectableFps[camera.id].orEmpty(), showFps = showFps, showResolution = showResolution,
                                         controlsVisible = controlsCameraId == camera.id, expanded = focused == camera.id,
+                                        revealControlsOnly = !actionsVisible,
                                         underGlobal = rowIndex == 0 && columnIndex == cols - 1,
                                         configurationLocked = recording.isNotEmpty(),
                                         dewarp = dewarp[camera.id] ?: model.dewarpFor(camera.id),
                                         onDewarp = { model.setDewarp(camera.id, it) },
-                                        onToggleControls = { showSettings = false; controlsCameraId = if (controlsCameraId == camera.id) null else camera.id },
+                                        onToggleControls = {
+                                            toolsActivity++
+                                            toolsVisible = true
+                                            if (actionsVisible) {
+                                                showSettings = false
+                                                controlsCameraId = if (controlsCameraId == camera.id) null else camera.id
+                                            }
+                                        },
                                         recording = camera.id in recording, modifier = Modifier.weight(1f),
                                         onSizeChange = { model.setSize(camera.id, it) }, onFpsChange = { model.setFps(camera.id, it) },
                                         onToggleRecording = { model.toggleRecording(camera.id) },
@@ -305,17 +344,20 @@ private fun WallScreen(
             }
         }
         // Draw after the dismiss surface so these controls remain usable while a panel is open.
-        Row(
-            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        AnimatedVisibility(
+            visible = actionsVisible,
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(horizontal = 14.dp, vertical = 12.dp),
+            enter = fadeIn(tween(150)), exit = fadeOut(tween(150)),
         ) {
-            WallActionButton(R.drawable.ic_wall_settings, stringResource(R.string.settings), showSettings && section != WallSection.Cameras) {
-                val close = showSettings && section == WallSection.Display
-                section = WallSection.Display; showSettings = !close; controlsCameraId = null
-            }
-            WallActionButton(R.drawable.ic_wall_cameras, stringResource(R.string.cameras), showSettings && section == WallSection.Cameras) {
-                val close = showSettings && section == WallSection.Cameras
-                section = WallSection.Cameras; showSettings = !close; controlsCameraId = null
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                WallActionButton(R.drawable.ic_wall_settings, stringResource(R.string.settings), showSettings && section != WallSection.Cameras) {
+                    val close = showSettings && section == WallSection.Display
+                    section = WallSection.Display; showSettings = !close; controlsCameraId = null
+                }
+                WallActionButton(R.drawable.ic_wall_cameras, stringResource(R.string.cameras), showSettings && section == WallSection.Cameras) {
+                    val close = showSettings && section == WallSection.Cameras
+                    section = WallSection.Cameras; showSettings = !close; controlsCameraId = null
+                }
             }
         }
     }

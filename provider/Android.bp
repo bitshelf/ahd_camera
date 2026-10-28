@@ -32,26 +32,56 @@ cc_library_shared {
     header_libs: ["media_plugin_headers"],
     cpp_std: "c++17",
 }
-cc_binary {
+// Narrow C ABI for the retained Android15 device/session/graphics adapter.
+cc_library_shared {
+    name: "libahd_camera_bridge",
+    vendor: true,
+    compile_multilib: "64",
+    srcs: ["bridge/adapter.cpp"],
+    shared_libs: [
+        "libahd_capture_io", "libahd_camera_android15",
+        "android.hardware.camera.common-V1-ndk", "android.hardware.camera.device-V1-ndk",
+        "libbinder_ndk", "libcamera_metadata", "libutils", "libhidlbase", "libfmq", "libtinyxml2",
+        "android.hardware.graphics.mapper@2.0", "android.hardware.graphics.mapper@3.0",
+        "android.hardware.graphics.mapper@4.0",
+    ],
+    static_libs: ["android.hardware.camera.common@1.0-helper"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+    cpp_std: "c++17",
+}
+rust_binary {
     name: "AhdCameraProvider",
     stem: "ahd-camera-provider",
+    crate_name: "ahd_camera_provider",
+    edition: "2021",
     vendor: true,
     compile_multilib: "64",
     relative_install_path: "hw",
-    srcs: ["service/*.cpp"],
-    shared_libs: [
-        "libahd_capture_io", "libahd_camera_android15", "android.hardware.camera.provider-V1-ndk",
-        "android.hardware.camera.device-V1-ndk", "android.hardware.camera.common-V1-ndk",
-        "libbinder_ndk", "libcamera_metadata", "liblog", "libtinyxml2",
-        "libutils", "libhidlbase", "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@3.0", "android.hardware.graphics.mapper@4.0",
-        "libfmq",
+    srcs: ["rust/main.rs"],
+    rustlibs: [
+        "liblogger", "liblog_rust", "libbinder_rs",
+        "android.hardware.camera.provider-V1-rust",
+        "android.hardware.camera.device-V1-rust",
+        "android.hardware.camera.common-V1-rust",
     ],
-    static_libs: ["android.hardware.camera.common@1.0-helper"],
+    shared_libs: ["libahd_camera_bridge"],
     init_rc: ["integration/ahd-camera-provider.rc"],
     vintf_fragments: ["integration/ahd-camera-provider.xml"],
-    required: ["AhdCameraProviderLimits"],
-    cpp_std: "c++17",
+    required: ["AhdCameraProviderConfig", "AhdCameraProviderLimits"],
+}
+rust_test_host {
+    name: "ahd_provider_policy_test",
+    crate_name: "ahd_provider_policy_test",
+    edition: "2021",
+    srcs: ["rust/policy.rs"],
+}
+// Node identities are owned by this repository; verify the map when porting.
+prebuilt_etc {
+    name: "AhdCameraProviderConfig",
+    vendor: true,
+    src: "integration/examples/v4l2-multiplane.xml",
+    sub_dir: "ahd_camera",
+    filename: "provider.xml",
 }
 prebuilt_etc {
     name: "AhdCameraProviderLimits",

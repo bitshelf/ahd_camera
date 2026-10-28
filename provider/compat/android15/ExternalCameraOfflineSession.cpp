@@ -301,14 +301,13 @@ void ExternalCameraOfflineSession::initOutputThread() {
         return;
     }
 
-    // Grab a shared_ptr to 'this' from ndk::SharedRefBase::ref()
-    std::shared_ptr<ExternalCameraOfflineSession> thiz = ref<ExternalCameraOfflineSession>();
+    // close() joins workers before destroying the borrowed parent.
 
     mBufferRequestThread = std::make_shared<ExternalCameraDeviceSession::BufferRequestThread>(
-            /*parent=*/thiz, mCallback);
+            /*parent=*/this, mCallback);
     mBufferRequestThread->run();
 
-    mOutputThread = std::make_shared<OutputThread>(/*parent=*/thiz, mCroppingType, mChars,
+    mOutputThread = std::make_shared<OutputThread>(/*parent=*/this, mCroppingType, mChars,
                                                    mBufferRequestThread, mOfflineReqs);
 
     mOutputThread->setExifMakeModel(mExifMake, mExifModel);
@@ -368,7 +367,7 @@ void ExternalCameraOfflineSession::cleanupBuffersLocked(int32_t id) {
 }
 
 bool ExternalCameraOfflineSession::OutputThread::threadLoop() {
-    auto parent = mParent.lock();
+    auto parent = mParent;
     if (parent == nullptr) {
         ALOGE("%s: session has been disconnected!", __FUNCTION__);
         return false;

@@ -78,7 +78,7 @@ class ExternalCameraOfflineSession final : public BnCameraOfflineSession,
   private:
     class OutputThread : public ExternalCameraDeviceSession::OutputThread {
       public:
-        OutputThread(std::weak_ptr<OutputThreadInterface> parent, CroppingType ct,
+        OutputThread(OutputThreadInterface* parent, CroppingType ct,
                      const common::V1_0::helper::CameraMetadata& chars,
                      std::shared_ptr<ExternalCameraDeviceSession::BufferRequestThread> bufReqThread,
                      std::deque<std::shared_ptr<HalRequest>>& offlineReqs)

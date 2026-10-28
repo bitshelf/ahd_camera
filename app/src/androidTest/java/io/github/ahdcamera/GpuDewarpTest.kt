@@ -23,8 +23,9 @@ import kotlin.math.tan
 class GpuDewarpTest {
     private val width = 320
     private val height = 240
-    private fun render(settings: DewarpSettings, draw: (android.graphics.Canvas) -> Unit): IntArray {
-        val reader = ImageReader.newInstance(width,height,PixelFormat.RGBA_8888,2,
+    private fun render(settings: DewarpSettings, outputWidth: Int = width, outputHeight: Int = height,
+        draw: (android.graphics.Canvas) -> Unit): IntArray {
+        val reader = ImageReader.newInstance(outputWidth,outputHeight,PixelFormat.RGBA_8888,2,
             HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_CPU_READ_OFTEN)
         val error = AtomicReference<Throwable?>()
         val renderer = GpuDewarp(width,height,reader.surface,null,settings) { error.set(it) }
@@ -37,8 +38,8 @@ class GpuDewarpTest {
                 val image = reader.acquireLatestImage()
                 if (image != null) return image.use {
                     val plane = it.planes[0]; val buffer = plane.buffer
-                    IntArray(width*height) { i ->
-                        val pos = (i/width)*plane.rowStride + (i%width)*plane.pixelStride
+                    IntArray(outputWidth*outputHeight) { i ->
+                        val pos = (i/outputWidth)*plane.rowStride + (i%outputWidth)*plane.pixelStride
                         Color.rgb(buffer.get(pos).toInt() and 255,buffer.get(pos+1).toInt() and 255,buffer.get(pos+2).toInt() and 255)
                     }
                 }
@@ -46,6 +47,31 @@ class GpuDewarpTest {
             }
             error("No GPU output frame")
         } finally { renderer.close(); reader.close() }
+    }
+
+    @Test fun tileSizedOutputsCoverBoundsWithoutStretching() {
+        // Output dimensions deliberately differ from the camera buffer. Edge
+        // stripes must crop away, and a square must stay square in both shapes.
+        for ((w,h) in listOf(256 to 256,480 to 120)) {
+            val result = render(DewarpSettings(enabled=false),w,h) { c ->
+                c.drawColor(Color.GREEN)
+                val p = Paint().apply { color=Color.RED }
+                if(w==h) {
+                    c.drawRect(0f,0f,40f,240f,p);c.drawRect(280f,0f,320f,240f,p)
+                } else {
+                    c.drawRect(0f,0f,320f,80f,p);c.drawRect(0f,160f,320f,240f,p)
+                }
+                p.color=Color.BLUE;c.drawRect(144f,104f,176f,136f,p)
+            }
+            for(x in listOf(2,w-3)) for(y in listOf(2,h-3))
+                assertEquals("Output must fill its tile at ($x,$y)",Color.GREEN,result[y*w+x])
+            val inside = if(w==h) 14 else 20
+            val outside = if(w==h) 22 else 30
+            for((dx,dy) in listOf(inside to 0,0 to inside,-inside to 0,0 to -inside))
+                assertEquals(Color.BLUE,result[(h/2+dy)*w+w/2+dx])
+            for((dx,dy) in listOf(outside to 0,0 to outside,-outside to 0,0 to -outside))
+                assertEquals(Color.GREEN,result[(h/2+dy)*w+w/2+dx])
+        }
     }
 
     @Test fun originalModePreservesOrientationAndColors() {

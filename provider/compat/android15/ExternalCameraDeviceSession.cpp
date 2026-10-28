@@ -215,12 +215,11 @@ bool ExternalCameraDeviceSession::isInitFailed() {
 }
 
 void ExternalCameraDeviceSession::initOutputThread() {
-    // Grab a shared_ptr to 'this' from ndk::SharedRefBase::ref()
-    std::shared_ptr<ExternalCameraDeviceSession> thiz = ref<ExternalCameraDeviceSession>();
+    // Worker lifetimes are bounded by closeImpl; they never own the session.
 
-    mBufferRequestThread = std::make_shared<BufferRequestThread>(/*parent=*/thiz, mCallback);
+    mBufferRequestThread = std::make_shared<BufferRequestThread>(/*parent=*/this, mCallback);
     mBufferRequestThread->run();
-    mOutputThread = std::make_shared<OutputThread>(/*parent=*/thiz, mCroppingType,
+    mOutputThread = std::make_shared<OutputThread>(/*parent=*/this, mCroppingType,
                                                    mCameraCharacteristics, mBufferRequestThread);
 }
 
@@ -1882,7 +1881,7 @@ binder_status_t ExternalCameraDeviceSession::dump(int fd, const char** /*args*/,
 
 // Start ExternalCameraDeviceSession::BufferRequestThread functions
 ExternalCameraDeviceSession::BufferRequestThread::BufferRequestThread(
-        std::weak_ptr<OutputThreadInterface> parent,
+        OutputThreadInterface* parent,
         std::shared_ptr<ICameraDeviceCallback> callbacks)
     : mParent(parent), mCallbacks(callbacks) {}
 
@@ -1995,7 +1994,7 @@ bool ExternalCameraDeviceSession::BufferRequestThread::threadLoop() {
             return false;
         }
 
-        auto parent = mParent.lock();
+        auto parent = mParent;
         if (parent == nullptr) {
             ALOGE("%s: session has been disconnected!", __FUNCTION__);
             mBufferReqs.clear();
@@ -2082,7 +2081,7 @@ bool ExternalCameraDeviceSession::BufferRequestThread::threadLoop() {
 // Start ExternalCameraDeviceSession::OutputThread functions
 
 ExternalCameraDeviceSession::OutputThread::OutputThread(
-        std::weak_ptr<OutputThreadInterface> parent, CroppingType ct,
+        OutputThreadInterface* parent, CroppingType ct,
         const common::V1_0::helper::CameraMetadata& chars,
         std::shared_ptr<BufferRequestThread> bufReqThread)
     : mParent(parent),
@@ -2182,7 +2181,7 @@ Status ExternalCameraDeviceSession::OutputThread::submitRequest(
 
 void ExternalCameraDeviceSession::OutputThread::flush() {
     ATRACE_CALL();
-    auto parent = mParent.lock();
+    auto parent = mParent;
     if (parent == nullptr) {
         ALOGE("%s: session has been disconnected!", __FUNCTION__);
         return;
@@ -2229,7 +2228,7 @@ void ExternalCameraDeviceSession::OutputThread::setExifMakeModel(const std::stri
 std::list<std::shared_ptr<HalRequest>>
 ExternalCameraDeviceSession::OutputThread::switchToOffline() {
     ATRACE_CALL();
-    auto parent = mParent.lock();
+    auto parent = mParent;
     if (parent == nullptr) {
         ALOGE("%s: session has been disconnected!", __FUNCTION__);
         return {};
@@ -2517,7 +2516,7 @@ int ExternalCameraDeviceSession::OutputThread::createJpegLocked(
 
         return 1;
     };
-    auto parent = mParent.lock();
+    auto parent = mParent;
     if (parent == nullptr) {
         ALOGE("%s: session has been disconnected!", __FUNCTION__);
         return 1;
@@ -2677,7 +2676,7 @@ void ExternalCameraDeviceSession::OutputThread::clearIntermediateBuffers() {
 
 bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
     std::shared_ptr<HalRequest> req;
-    auto parent = mParent.lock();
+    auto parent = mParent;
     if (parent == nullptr) {
         ALOGE("%s: session has been disconnected!", __FUNCTION__);
         return false;

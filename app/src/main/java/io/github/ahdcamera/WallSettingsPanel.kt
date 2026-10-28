@@ -114,9 +114,9 @@ internal fun <T> PanelDropdown(label: String, value: T, options: List<T>, enable
     var expanded by remember { mutableStateOf(false) }
     BoxWithConstraints {
     val fieldWidth = (maxWidth * if (accented) 0.66f else 0.54f).coerceAtMost(215.dp)
-    Row(Modifier.fillMaxWidth().heightIn(min = if (accented) 57.dp else 47.dp)
+    Row(Modifier.fillMaxWidth().heightIn(min = if (accented) 48.dp else 47.dp)
         .background(if (accented) Color.White.copy(alpha = 0.025f) else Color.Transparent, RoundedCornerShape(10.dp))
-        .padding(if (accented) 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(horizontal = if (accented) 4.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) Icon(painterResource(icon), null, Modifier.padding(end = 8.dp).size(18.dp), tint = WallPalette.ControlAccent)
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
         Box(Modifier.width(fieldWidth)) {
@@ -167,17 +167,18 @@ internal fun CameraControlsPanel(
     onSize: (io.github.ahdcamera.camera.StreamSize) -> Unit, onFps: (Pair<Int, Int>) -> Unit,
     onClose: () -> Unit,
 ) {
+    var showAdjustment by remember { mutableStateOf(false) }
     Surface(
         modifier.pointerInput(Unit) { detectTapGestures {} },
-        shape = RoundedCornerShape(18.dp), color = WallPalette.Panel,
+        shape = RoundedCornerShape(14.dp), color = WallPalette.Panel,
         border = BorderStroke(1.dp, WallPalette.Border), shadowElevation = 12.dp,
     ) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 14.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.picture_settings), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 PanelClose(onClose)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(2.dp))
             PanelDropdown(stringResource(R.string.resolution), size, sizes, !locked && sizes.isNotEmpty(), { it?.let(onSize) }, accented = true) {
                 if (it == null) stringResource(R.string.capability_not_reported) else stringResource(R.string.grid_dimensions, it.width, it.height)
             }
@@ -187,12 +188,15 @@ internal fun CameraControlsPanel(
                     else -> stringResource(R.string.frame_rate_range, it.first, it.second) }
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = WallPalette.Border)
+            HorizontalDivider(Modifier.padding(vertical = 4.dp), color = WallPalette.Border)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.dewarp_approximate), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.dewarp_approximate), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                if (dewarp.enabled) IconButton(onClick = { showAdjustment = !showAdjustment }, modifier = Modifier.size(48.dp)) {
+                    Icon(painterResource(R.drawable.ic_wall_chevron), stringResource(if (showAdjustment) R.string.hide_dewarp_adjustment else R.string.dewarp_adjustment), Modifier.size(16.dp))
+                }
                 Switch(dewarp.enabled, { onDewarp(dewarp.copy(enabled = it)) }, enabled = !locked)
             }
-            if (dewarp.enabled) {
+            if (dewarp.enabled && showAdjustment) {
                 Text(stringResource(R.string.dewarp_notice), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.dewarp_strength, (dewarp.strength * 100).toInt()))
                 Slider(dewarp.strength, { onDewarp(dewarp.copy(strength = it)) }, enabled = !locked)

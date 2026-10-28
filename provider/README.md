@@ -11,7 +11,8 @@ App 仍然使用 Kotlin Camera2，没有 JNI、设备节点权限或平台签名
 |---|---|---|
 | `core` | 节点白名单、驱动/总线身份验证、V4L2 多平面适配、能力和解码器时序读取 | 使用 Linux V4L2，不包含 Rockchip/RGA/ISP API |
 | `compat/android15` | 固定版本 AOSP CameraDevice/Session、元数据、buffer/fence 与图像输出 | Android 版本相关的适配层；不覆盖 SDK 源码 |
-| `service` | AIDL Provider 注册、配置节点的状态通知、并发组合和像素吞吐预算 | 稳定 AIDL NDK backend，独立设备 ID 命名空间 |
+| `rust` | Rust AIDL Provider 注册、状态通知、并发组合和像素吞吐预算 | 冻结 V1 Rust backend，独立设备 ID 命名空间 |
+| `bridge` | 窄 C ABI，装载配置、探测节点、移交设备 Binder 和解码元数据 | C++ Device/Session 保留；Rust unsafe 集中于 adapter.rs |
 | `integration` | init、VINTF、独立 SELinux 域、配置示例 | 板级修改仅包括注册、节点身份映射和可选图形适配 |
 
 `compat/android15/UPSTREAM.json` 记录导入 AOSP 源码的 revision 与每个原文件的 SHA-256，
@@ -66,13 +67,15 @@ HAL 域的视频设备访问权限；新增策略仅针对新进程。白名单�
 ```make
 # 产品配置
 PRODUCT_PACKAGES += AhdCamera AhdCameraProvider
-PRODUCT_COPY_FILES += <board>/ahd_provider.xml:$(TARGET_COPY_OUT_VENDOR)/etc/ahd_camera/provider.xml
 
 # BoardConfig.mk
 BOARD_VENDOR_SEPOLICY_DIRS += external/ahd_camera/provider/integration/sepolicy
 ```
 
-将经过实机核验的设备映射写入板级 provider.xml；示例位于 `integration/examples`，无需额外节点标签。
+`AhdCameraProvider` 的 `required` 自动安装 `AhdCameraProviderConfig`，将仓库内
+`integration/examples/v4l2-multiplane.xml` 安装为 `/vendor/etc/ahd_camera/provider.xml`。
+无需将 XML 复制到板级目录或添加 `PRODUCT_COPY_FILES`；已有旧的同目标拷贝规则应移除。
+移植时在仓库内调整该 XML，并实机核验节点身份、解码器链路和吞吐预算，无需额外节点标签。
 缺少 provider.xml 时服务不枚举设备，不扫描其他节点。`limits.xml` 是独立的 buffer/方向配置，
 不会读取或覆盖 USB Provider 使用的 external_camera_config.xml。
 不同 SoC 若需要 gralloc 的额外设备权限，在板级策略或独立 SoC adapter 中补充，保持核心
@@ -80,7 +83,8 @@ BOARD_VENDOR_SEPOLICY_DIRS += external/ahd_camera/provider/integration/sepolicy
 驱动，系统镜像需集成 Provider、VINTF 和策略并重启。
 
 ```sh
-m AhdCameraProvider ahd_capture_io_test
+m AhdCameraProvider ahd_provider_policy_test ahd_capture_io_test
+out/host/linux-x86/nativetest64/ahd_provider_policy_test/ahd_provider_policy_test
 out/host/linux-x86/nativetest64/ahd_capture_io_test/ahd_capture_io_test
 ```
 
@@ -92,3 +96,7 @@ out/host/linux-x86/nativetest64/ahd_capture_io_test/ahd_capture_io_test
 [Stable AIDL HAL](https://source.android.com/docs/core/architecture/aidl/aidl-hals)。
 并发的最低输出组合与 resourceCost 约束以当前 SDK 的 ICameraProvider.aidl 为准；示例使用
 保守的每路 resourceCost=100，不降低现有相机的仲裁成本。
+
+当前分支是 Rust Provider 与 C++ Device/Session 的混合实现，迁移范围和实机测试说明见
+[Rust HAL](../docs/rust-hal.md)，不能把服务端改为 Rust 等同于整个 Camera HAL 已完全重写。
+Rust Device 入口负责结果/通知的有界保序交付；兼容层中工作线程的父对象生命周期也已加固。

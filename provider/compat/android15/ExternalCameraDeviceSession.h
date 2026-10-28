@@ -126,7 +126,7 @@ class ExternalCameraDeviceSession : public BnCameraDeviceSession, public OutputT
 
     class BufferRequestThread : public SimpleThread {
       public:
-        BufferRequestThread(std::weak_ptr<OutputThreadInterface> parent,
+        BufferRequestThread(OutputThreadInterface* parent,
                             std::shared_ptr<ICameraDeviceCallback> callbacks);
 
         int requestBufferStart(const std::vector<HalStreamBuffer>&);
@@ -138,7 +138,8 @@ class ExternalCameraDeviceSession : public BnCameraDeviceSession, public OutputT
       private:
         void waitForNextRequest();
 
-        const std::weak_ptr<OutputThreadInterface> mParent;
+        // Borrowed from the owning session; its destructor joins workers before freeing state.
+        OutputThreadInterface* const mParent;
         const std::shared_ptr<ICameraDeviceCallback> mCallbacks;
 
         std::mutex mLock;
@@ -163,7 +164,7 @@ class ExternalCameraDeviceSession : public BnCameraDeviceSession, public OutputT
 
     class OutputThread : public SimpleThread {
       public:
-        OutputThread(std::weak_ptr<OutputThreadInterface> parent, CroppingType,
+        OutputThread(OutputThreadInterface* parent, CroppingType,
                      const common::V1_0::helper::CameraMetadata&,
                      std::shared_ptr<BufferRequestThread> bufReqThread);
         ~OutputThread();
@@ -205,7 +206,8 @@ class ExternalCameraDeviceSession : public BnCameraDeviceSession, public OutputT
 
         void clearIntermediateBuffers();
 
-        const std::weak_ptr<OutputThreadInterface> mParent;
+        // Borrowed from the owning session; its destructor joins workers before freeing state.
+        OutputThreadInterface* const mParent;
         const CroppingType mCroppingType;
         const common::V1_0::helper::CameraMetadata mCameraCharacteristics;
 
