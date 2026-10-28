@@ -21,21 +21,11 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           # Explicitly exclude the obsolete "tools" package used by setup-android v3.
-          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
-      - name: Install Rust Android target
-        run: rustup target add aarch64-linux-android
-      - name: Check Rust core
-        run: |
-          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
-          export LIBCLANG_PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib"
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang"
-          cargo fmt --all -- --check
-          cargo test --workspace --locked
-          cargo clippy --workspace --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Build Android app
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug bundleRelease
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest bundleRelease
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: android-apk-and-bundles

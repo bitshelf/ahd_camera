@@ -1,0 +1,6 @@
+service vendor.camera-provider-ahd /vendor/bin/hw/ahd-camera-provider
+    interface aidl android.hardware.camera.provider.ICameraProvider/ahd/0
+    class hal
+    user cameraserver
+    group camera
+    task_profiles CameraServiceCapacity

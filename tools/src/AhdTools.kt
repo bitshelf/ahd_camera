@@ -31,17 +31,7 @@ private fun manifest(arguments: List<String>) {
     val parser = factory.newDocumentBuilder()
     val document = parser.parse(File(paths[0]))
     val root = document.documentElement
-    val packageName = "io.github.ahdcamera" + if (debug) ".debug" else ""
-    root.setAttribute("package", packageName)
-    // Match Gradle manifest placeholders, keeping debug signature permissions distinct.
-    for (tag in listOf("permission", "uses-permission")) {
-        val nodes = root.getElementsByTagName(tag)
-        for (index in 0 until nodes.length) {
-            val element = nodes.item(index) as Element
-            val name = element.getAttributeNS(ANDROID_NS, "name")
-            element.setAttributeNS(ANDROID_NS, "android:name", name.replace("\${applicationId}", packageName))
-        }
-    }
+    root.setAttribute("package", "io.github.ahdcamera" + if (debug) ".debug" else "")
     root.setAttributeNS(ANDROID_NS, "android:versionCode", "1")
     root.setAttributeNS(
         ANDROID_NS,

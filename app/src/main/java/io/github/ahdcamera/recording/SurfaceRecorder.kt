@@ -55,11 +55,11 @@ private constructor(private val context: Context, private val onResult: (String)
                                     info
                                         .getCapabilitiesForType(mime)
                                         .videoCapabilities
-                                        .areSizeAndRateSupported(
+                                        ?.areSizeAndRateSupported(
                                             size.width,
                                             size.height,
                                             fps.toDouble(),
-                                        )
+                                        ) == true
                                 }
                                 .getOrDefault(false)
                     } ?: error(context.getString(R.string.no_hardware_encoder, size.width, size.height, fps))
@@ -86,7 +86,7 @@ private constructor(private val context: Context, private val onResult: (String)
                                 .toInt()
                         setInteger(
                             MediaFormat.KEY_BIT_RATE,
-                            capabilities.videoCapabilities.bitrateRange.clamp(bitrate),
+                            requireNotNull(capabilities.videoCapabilities).bitrateRange.clamp(bitrate),
                         )
                         setInteger(MediaFormat.KEY_FRAME_RATE, fps)
                         setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)

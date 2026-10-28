@@ -1,3 +1,0 @@
-# SoC-specific graphics access. Replace this adapter when porting off Rockchip.
-# Generic app-domain and V4L2 rules live in ahd_capture_app.te.
-rw_rockchip_graphic_device(ahd_capture_app)

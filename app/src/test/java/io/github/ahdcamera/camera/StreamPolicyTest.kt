@@ -37,30 +37,19 @@ class StreamPolicyTest {
         assertTrue(StreamPolicy.supportedFps(emptyList(), size).isEmpty())
     }
 
-    @Test fun v4l2RatesRemainSpecificToTheirReportedSize() {
-        val small = StreamSize(640, 480)
-        val c = camera(listOf(60 to 60), 0).copy(
-            sizes = listOf(size, small),
-            fpsBySize = mapOf(size to listOf(25 to 25), small to emptyList()),
-        )
-        assertEquals(listOf(25 to 25), StreamPolicy.supportedFps(listOf(c), size))
-        assertTrue(StreamPolicy.supportedFps(listOf(c), small).isEmpty())
+    @Test fun rejectsSizesNotAdvertisedByEveryCamera() {
+        val camera = camera(listOf(30 to 30), 0)
+        assertTrue(StreamPolicy.supportedFps(listOf(camera), StreamSize(3840, 2160)).isEmpty())
+        val other = camera.copy(sizes = listOf(StreamSize(640, 480)))
+        assertTrue(StreamPolicy.supportedFps(listOf(camera, other), size).isEmpty())
+    }
+
+    @Test fun rejectsInvalidRangesWithoutDiscardingValidOnes() {
+        val camera = camera(listOf(0 to 30, 30 to 15, -1 to 25, 25 to 25), 0)
+        assertEquals(listOf(25 to 25), StreamPolicy.supportedFps(listOf(camera), size))
     }
 
     @Test fun pixelCountDoesNotOverflow() {
         assertEquals(10_000_000_000L, StreamSize(100000, 100000).area)
-    }
-    @org.junit.Test fun fixedInputLimitsMetadataToItsObservedCadence() {
-        val reported = (1..30).map { it to it }
-        val available = StreamPolicy.effectiveFps(reported, 25, false)
-        org.junit.Assert.assertEquals(25 to 25, available.first())
-        org.junit.Assert.assertTrue((24 to 24) in available)
-        org.junit.Assert.assertFalse((30 to 30) in available)
-    }
-
-    @org.junit.Test fun adjustableDeviceKeepsHigherModesAfterChoosingALowRate() {
-        val reported = listOf(10 to 10, 30 to 30)
-        org.junit.Assert.assertEquals(reported, StreamPolicy.effectiveFps(reported, 10, true))
-        org.junit.Assert.assertEquals(listOf(25 to 25), StreamPolicy.effectiveFps(listOf(30 to 30), 25, false))
     }
 }

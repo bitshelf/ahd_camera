@@ -8,43 +8,6 @@ license {
     license_text: ["LICENSE"],
 }
 
-rust_defaults {
-    name: "ahd_rust_defaults",
-    edition: "2021",
-    flags: ["--cfg=soong"],
-    compile_multilib: "64",
-    prefer_rlib: true,
-}
-rust_library_rlib {
-    name: "libahd_core",
-    crate_name: "ahd_core",
-    defaults: ["ahd_rust_defaults"],
-    srcs: ["crates/ahd-core/src/lib.rs"],
-}
-rust_library_rlib {
-    name: "libahd_v4l2",
-    crate_name: "ahd_v4l2",
-    defaults: ["ahd_rust_defaults"],
-    srcs: ["crates/ahd-v4l2/src/lib.rs"],
-    rustlibs: ["libahd_core", "liblibc"],
-}
-rust_binary {
-    name: "ahd-v4l2-probe",
-    crate_name: "ahd_v4l2_probe",
-    defaults: ["ahd_rust_defaults"],
-    srcs: ["crates/ahd-v4l2/src/bin/ahd-v4l2-probe.rs"],
-    rustlibs: ["libahd_v4l2"],
-}
-
-rust_ffi_shared {
-    name: "libahd_android",
-    crate_name: "ahd_android",
-    defaults: ["ahd_rust_defaults"],
-    srcs: ["crates/ahd-android/src/lib.rs"],
-    rustlibs: ["libahd_core", "libahd_v4l2", "libjni", "liblibloading", "liblibc"],
-    shared_libs: ["libandroid", "libEGL", "libGLESv2", "libdl"],
-}
-
 java_binary_host {
     name: "ahd_build_tool",
     srcs: ["tools/src/AhdTools.kt"],
@@ -72,10 +35,6 @@ java_defaults {
     min_sdk_version: "31",
     target_sdk_version: "35",
     java_version: "17",
-    compile_multilib: "64",
-    jni_libs: ["libahd_android"],
-    jni_uses_platform_apis: true,
-    use_embedded_native_libs: true,
     static_libs: [
         "androidx.activity_activity-compose",
         "androidx.core_core-ktx",
@@ -89,12 +48,10 @@ java_defaults {
 }
 android_app {
     name: "AhdCamera",
+    // Preserve the preinstalled App signing identity across firmware updates.
     certificate: "platform",
-    privileged: true,
-    system_ext_specific: true,
     defaults: ["ahd_app_defaults"],
     manifest: ":ahd_aosp_manifest",
-    required: ["ahd-capture-permissions.xml"],
     optimize: {
         enabled: true,
         shrink: true,
@@ -103,20 +60,9 @@ android_app {
 }
 android_app {
     name: "AhdCameraDebug",
-    certificate: "platform",
-    privileged: true,
-    system_ext_specific: true,
     defaults: ["ahd_app_defaults"],
     manifest: ":ahd_aosp_debug_manifest",
     // Keep the source/resource namespace stable while the APK package has .debug.
     aaptflags: ["--custom-package", "io.github.ahdcamera"],
     optimize: { enabled: false },
-}
-
-// Installed with the release system App through its required dependency.
-prebuilt_etc {
-    name: "ahd-capture-permissions.xml",
-    src: "integration/permissions/ahd-capture-permissions.xml",
-    sub_dir: "permissions",
-    system_ext_specific: true,
 }

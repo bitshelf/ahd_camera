@@ -15,8 +15,8 @@
     <string name="select_hint">可选择多路摄像头，按需开启独立录像。</string>
     <string name="select_cameras">选择摄像头</string>
     <string name="camera_count">摄像头 / %1$d</string>
-    <string name="direct_capture_hint">仅列出设备节点，实际采集能力由驱动协商并在画面中显示。</string>
-    <string name="concurrent_hint">选择采集节点。同时预览的路数取决于设备和图像处理资源。</string>
+    <string name="direct_capture_hint">摄像头和画面参数由 Android Camera2 提供。</string>
+    <string name="concurrent_hint">多路预览需要设备支持对应的摄像头组合。不支持的组合无法勾选。</string>
     <string name="remove_disconnected">移除已断开的选择</string>
     <string name="done">完成</string>
     <string name="refresh_devices">刷新设备</string>
@@ -66,8 +66,6 @@
     <string name="scan_failed">设备扫描失败：%1$s</string>
     <string name="status_read_failed">状态读取失败：%1$s</string>
     <string name="opening_device">正在打开设备</string>
-    <string name="native_capture_failed">native 采集初始化失败</string>
-    <string name="native_library_failed">native 库加载失败：%1$s</string>
     <string name="no_hardware_encoder">没有支持 %1$d×%2$d@%3$d 的硬件 H.264 编码器</string>
     <string name="encoder_surface_unsupported">编码器不支持 Surface 输入</string>
     <string name="recording_create_failed">无法创建录像文件</string>
@@ -90,13 +88,11 @@
     <string name="frame_rate">%1$d fps</string>
     <string name="compact_frame_rate">%1$.1f fps</string>
     <string name="expand_camera">放大摄像头 %1$s</string>
-    <string name="device_access_denied">无法列出摄像头设备节点，请检查固件对本应用的设备权限和 SELinux 策略。</string>
     <plurals name="selected_cameras">
         <item quantity="other">已选择 %1$d 路摄像头</item>
     </plurals>
-    <string name="native_initializing">正在初始化 V4L2 / RGA</string>
-    <string name="native_stopped">已停止</string>
-    <string name="native_capture_error">采集错误：%1$s</string>
+    <string name="capture_stopped">已停止</string>
+    <string name="capture_error">采集错误：%1$s</string>
     <string name="layout_rows">行数</string>
     <string name="layout_columns">列数</string>
     <string name="capture_resolution">采集分辨率</string>
@@ -114,12 +110,6 @@
     <string name="tap_camera_controls">点击摄像头画面，显示或隐藏该路分辨率和帧率选择。</string>
     <string name="camera_controls">摄像头 %1$s 参数</string>
     <string name="hide_controls">隐藏参数</string>
-    <string name="native_node_unavailable">设备不可用：%1$s</string>
-    <string name="native_node_permissions">无法查询 %1$d 个视频节点。需要部署设备访问权限，仅授予相机权限不足以访问。</string>
-    <string name="native_opening">正在打开 V4L2 设备</string>
-    <string name="native_streaming">V4L2 · RGA · GLES</string>
-    <string name="native_skipped_frames">已跳过 %1$d 帧</string>
-    <string name="native_scan_denied">无法枚举 /dev：设备访问被拒绝。仅使用平台签名并不会获得采集权限。</string>
     <string name="display_settings">显示</string>
     <string name="language">语言</string>
     <string name="language_system">跟随系统</string>
@@ -140,6 +130,6 @@
     <string name="appearance">外观</string>
     <string name="theme_dark">深色</string>
     <string name="theme_light">浅色</string>
-    <string name="about_description">AHD Camera · 多路 V4L2 摄像头预览与录制。</string>
+    <string name="about_description">AHD Camera · 多路 Camera2 摄像头预览与录制。</string>
     <string name="add_camera_hint">点击添加摄像头</string>
 </resources>

@@ -1,0 +1,822 @@
+--- a/ExternalCameraDevice.cpp
++++ b/ExternalCameraDevice.cpp
+@@ -14,7 +14,7 @@
+  * limitations under the License.
+  */
+ 
+-#define LOG_TAG "ExtCamDev"
++#define LOG_TAG "AhdCamDev"
+ // #define LOG_NDEBUG 0
+ #include <log/log.h>
+ 
+@@ -24,41 +24,37 @@
+ #include <convert.h>
+ #include <linux/videodev2.h>
+ #include <regex>
++#include "CaptureIo.h"
+ #include <set>
+ 
+ namespace android {
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::common::Status;
+ 
+ namespace {
+-// Only support MJPEG for now as it seems to be the one supports higher fps
++// Independent AHD adapter: only contiguous NV12 capture is enabled.
+ // Other formats to consider in the future:
+ // * V4L2_PIX_FMT_YVU420 (== YV12)
+ // * V4L2_PIX_FMT_YVYU (YVYU: can be converted to YV12 or other YUV420_888 formats)
+-const std::array<uint32_t, /*size*/ 2> kSupportedFourCCs{
+-        {V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
++const std::array<uint32_t, /*size*/ 1> kSupportedFourCCs{
++        {V4L2_PIX_FMT_NV12}};  // double braces required in C++11
+ 
+ constexpr int MAX_RETRY = 5;                  // Allow retry v4l2 open failures a few times.
+ constexpr int OPEN_RETRY_SLEEP_US = 100'000;  // 100ms * MAX_RETRY = 0.5 seconds
+ 
+-const std::regex kDevicePathRE("/dev/video([0-9]+)");
++
+ }  // namespace
+ 
+ std::string ExternalCameraDevice::kDeviceVersion = "1.1";
+ 
+ ExternalCameraDevice::ExternalCameraDevice(const std::string& devicePath,
+-                                           const ExternalCameraConfig& config)
+-    : mCameraId("-1"), mDevicePath(devicePath), mCfg(config) {
+-    std::smatch sm;
+-    if (std::regex_match(mDevicePath, sm, kDevicePathRE)) {
+-        mCameraId = std::to_string(mCfg.cameraIdOffset + std::stoi(sm[1]));
+-    } else {
+-        ALOGE("%s: device path match failed for %s", __FUNCTION__, mDevicePath.c_str());
+-    }
++                                           const ExternalCameraConfig& config, const std::string& cameraId)
++    : mCameraId(cameraId), mDevicePath(devicePath), mCfg(config) {
++
+ }
+ 
+ ExternalCameraDevice::~ExternalCameraDevice() {}
+@@ -90,7 +86,7 @@
+         return fromStatus(Status::ILLEGAL_ARGUMENT);
+     }
+ 
+-    _aidl_return->resourceCost = 100;
++    _aidl_return->resourceCost = mCfg.resourceCost;
+     return fromStatus(Status::OK);
+ }
+ 
+@@ -131,13 +127,13 @@
+     }
+ 
+     int numAttempt = 0;
+-    unique_fd fd(::open(mDevicePath.c_str(), O_RDWR));
++    unique_fd fd(::ahd::capture::openNode(mDevicePath));
+     while (fd.get() < 0 && numAttempt < MAX_RETRY) {
+         // Previous retry attempts failed. Retry opening the device at most MAX_RETRY times
+         ALOGW("%s: v4l2 device %s open failed, wait 33ms and try again", __FUNCTION__,
+               mDevicePath.c_str());
+         usleep(OPEN_RETRY_SLEEP_US);  // sleep and try again
+-        fd.reset(::open(mDevicePath.c_str(), O_RDWR));
++        fd.reset(::ahd::capture::openNode(mDevicePath));
+         numAttempt++;
+     }
+ 
+@@ -270,7 +266,7 @@
+     }
+ 
+     // init camera characteristics
+-    unique_fd fd(::open(mDevicePath.c_str(), O_RDWR));
++    unique_fd fd(::ahd::capture::openNode(mDevicePath));
+     if (fd.get() < 0) {
+         ALOGE("%s: v4l2 device open %s failed", __FUNCTION__, mDevicePath.c_str());
+         return DEAD_OBJECT;
+@@ -331,7 +327,7 @@
+             case V4L2_PIX_FMT_Z16:
+                 hasDepth = true;
+                 break;
+-            case V4L2_PIX_FMT_MJPEG:
++            case V4L2_PIX_FMT_NV12:
+                 hasColor = true;
+                 break;
+             default:
+@@ -645,7 +641,7 @@
+             case V4L2_PIX_FMT_Z16:
+                 hasDepth = true;
+                 break;
+-            case V4L2_PIX_FMT_MJPEG:
++            case V4L2_PIX_FMT_NV12:
+                 hasColor = true;
+                 break;
+             default:
+@@ -670,7 +666,7 @@
+     }
+     if (hasColor) {
+         status_t ret =
+-                initOutputCharsKeysByFormat(metadata, V4L2_PIX_FMT_MJPEG, halFormats,
++                initOutputCharsKeysByFormat(metadata, V4L2_PIX_FMT_NV12, halFormats,
+                                             ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
+                                             ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
+                                             ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
+@@ -790,11 +786,11 @@
+     std::vector<int32_t> fpsRanges;
+     // FPS ranges
+     for (const auto& framerate : framerates) {
+-        // Empirical: webcams often have close to 2x fps error and cannot support fixed fps range
+-        fpsRanges.push_back(framerate / 2);
++        // Advertise the validated decoder/driver interval, without an invented half-rate.
+         fpsRanges.push_back(framerate);
+-    }
+-    minFps /= 2;
++        fpsRanges.push_back(framerate);
++    }
++
+     int64_t maxFrameDuration = 1000000000LL / minFps;
+ 
+     UPDATE(ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES, fpsRanges.data(), fpsRanges.size());
+@@ -810,40 +806,11 @@
+ void ExternalCameraDevice::getFrameRateList(int fd, double fpsUpperBound,
+                                             SupportedV4L2Format* format) {
+     format->frameRates.clear();
+-
+-    v4l2_frmivalenum frameInterval{
+-            .index = 0,
+-            .pixel_format = format->fourcc,
+-            .width = static_cast<__u32>(format->width),
+-            .height = static_cast<__u32>(format->height),
+-    };
+-
+-    for (frameInterval.index = 0;
+-         TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frameInterval)) == 0;
+-         ++frameInterval.index) {
+-        if (frameInterval.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+-            if (frameInterval.discrete.numerator != 0) {
+-                SupportedV4L2Format::FrameRate fr = {frameInterval.discrete.numerator,
+-                                                     frameInterval.discrete.denominator};
+-                double framerate = fr.getFramesPerSecond();
+-                if (framerate > fpsUpperBound) {
+-                    continue;
+-                }
+-                ALOGV("index:%d, format:%c%c%c%c, w %d, h %d, framerate %f", frameInterval.index,
+-                      frameInterval.pixel_format & 0xFF, (frameInterval.pixel_format >> 8) & 0xFF,
+-                      (frameInterval.pixel_format >> 16) & 0xFF,
+-                      (frameInterval.pixel_format >> 24) & 0xFF, frameInterval.width,
+-                      frameInterval.height, framerate);
+-                format->frameRates.push_back(fr);
+-            }
+-        }
+-    }
+-
+-    if (format->frameRates.empty()) {
+-        ALOGE("%s: failed to get supported frame rates for format:%c%c%c%c w %d h %d", __FUNCTION__,
+-              frameInterval.pixel_format & 0xFF, (frameInterval.pixel_format >> 8) & 0xFF,
+-              (frameInterval.pixel_format >> 16) & 0xFF, (frameInterval.pixel_format >> 24) & 0xFF,
+-              frameInterval.width, frameInterval.height);
++    for (const auto& rate : ::ahd::capture::frameIntervals(fd, format->fourcc, format->width, format->height)) {
++        if (rate.numerator && rate.denominator &&
++            static_cast<double>(rate.denominator) / rate.numerator <= fpsUpperBound) {
++            format->frameRates.push_back({rate.numerator, rate.denominator});
++        }
+     }
+ }
+ 
+@@ -878,69 +845,17 @@
+ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedFormatsLocked(
+         int fd, CroppingType cropType,
+         const std::vector<ExternalCameraConfig::FpsLimitation>& fpsLimits,
+-        const std::vector<ExternalCameraConfig::FpsLimitation>& depthFpsLimits,
+-        const Size& minStreamSize, bool depthEnabled) {
+-    std::vector<SupportedV4L2Format> outFmts;
+-    struct v4l2_fmtdesc fmtdesc {
+-        .index = 0, .type = V4L2_BUF_TYPE_VIDEO_CAPTURE
+-    };
+-    int ret = 0;
+-    while (ret == 0) {
+-        ret = TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc));
+-        ALOGV("index:%d,ret:%d, format:%c%c%c%c", fmtdesc.index, ret, fmtdesc.pixelformat & 0xFF,
+-              (fmtdesc.pixelformat >> 8) & 0xFF, (fmtdesc.pixelformat >> 16) & 0xFF,
+-              (fmtdesc.pixelformat >> 24) & 0xFF);
+-
+-        if (ret != 0 || (fmtdesc.flags & V4L2_FMT_FLAG_EMULATED)) {
+-            // Skip if IOCTL failed, or if the format is emulated
+-            fmtdesc.index++;
+-            continue;
+-        }
+-        auto it =
+-                std::find(kSupportedFourCCs.begin(), kSupportedFourCCs.end(), fmtdesc.pixelformat);
+-        if (it == kSupportedFourCCs.end()) {
+-            fmtdesc.index++;
+-            continue;
+-        }
+-
+-        // Found supported format
+-        v4l2_frmsizeenum frameSize{.index = 0, .pixel_format = fmtdesc.pixelformat};
+-        for (; TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frameSize)) == 0;
+-             ++frameSize.index) {
+-            if (frameSize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+-                ALOGV("index:%d, format:%c%c%c%c, w %d, h %d", frameSize.index,
+-                      fmtdesc.pixelformat & 0xFF, (fmtdesc.pixelformat >> 8) & 0xFF,
+-                      (fmtdesc.pixelformat >> 16) & 0xFF, (fmtdesc.pixelformat >> 24) & 0xFF,
+-                      frameSize.discrete.width, frameSize.discrete.height);
+-
+-                // Disregard h > w formats so all aspect ratio (h/w) <= 1.0
+-                // This will simplify the crop/scaling logic down the road
+-                if (frameSize.discrete.height > frameSize.discrete.width) {
+-                    continue;
+-                }
+-
+-                // Discard all formats which is smaller than minStreamSize
+-                if (frameSize.discrete.width < minStreamSize.width ||
+-                    frameSize.discrete.height < minStreamSize.height) {
+-                    continue;
+-                }
+-
+-                SupportedV4L2Format format{
+-                        .width = static_cast<int32_t>(frameSize.discrete.width),
+-                        .height = static_cast<int32_t>(frameSize.discrete.height),
+-                        .fourcc = fmtdesc.pixelformat};
+-
+-                if (format.fourcc == V4L2_PIX_FMT_Z16 && depthEnabled) {
+-                    updateFpsBounds(fd, cropType, depthFpsLimits, format, outFmts);
+-                } else {
+-                    updateFpsBounds(fd, cropType, fpsLimits, format, outFmts);
+-                }
+-            }
+-        }
+-        fmtdesc.index++;
+-    }
+-    trimSupportedFormats(cropType, &outFmts);
+-    return outFmts;
++        const std::vector<ExternalCameraConfig::FpsLimitation>&,
++        const Size& minStreamSize, bool) {
++    std::vector<SupportedV4L2Format> out;
++    for (const auto& size : ::ahd::capture::frameSizes(fd, V4L2_PIX_FMT_NV12)) {
++        if (size.first < minStreamSize.width || size.second < minStreamSize.height ||
++            size.first < size.second || size.first % 2 || size.second % 2) continue;
++        SupportedV4L2Format format{size.first, size.second, V4L2_PIX_FMT_NV12};
++        updateFpsBounds(fd, cropType, fpsLimits, format, out);
++    }
++    trimSupportedFormats(cropType, &out);
++    return out;
+ }
+ 
+ void ExternalCameraDevice::trimSupportedFormats(CroppingType cropType,
+--- a/ExternalCameraDevice.h
++++ b/ExternalCameraDevice.h
+@@ -25,7 +25,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::common::CameraResourceCost;
+ using ::aidl::android::hardware::camera::device::BnCameraDevice;
+@@ -34,7 +34,7 @@
+ using ::aidl::android::hardware::camera::device::ICameraDeviceSession;
+ using ::aidl::android::hardware::camera::device::ICameraInjectionSession;
+ using ::aidl::android::hardware::camera::device::StreamConfiguration;
+-using ::android::hardware::camera::external::common::ExternalCameraConfig;
++using ::android::hardware::camera::ahd_external::common::ExternalCameraConfig;
+ 
+ class ExternalCameraDevice : public BnCameraDevice {
+   public:
+@@ -43,7 +43,7 @@
+     // be multiple CameraDevice trying to access the same physical camera.  Also, provider will have
+     // to keep track of all CameraDevice objects in order to notify CameraDevice when the underlying
+     // camera is detached.
+-    ExternalCameraDevice(const std::string& devicePath, const ExternalCameraConfig& config);
++    ExternalCameraDevice(const std::string& devicePath, const ExternalCameraConfig& config, const std::string& cameraId);
+     ~ExternalCameraDevice() override;
+ 
+     ndk::ScopedAStatus getCameraCharacteristics(CameraMetadata* _aidl_return) override;
+--- a/ExternalCameraDeviceSession.cpp
++++ b/ExternalCameraDeviceSession.cpp
+@@ -14,11 +14,12 @@
+  * limitations under the License.
+  */
+ 
+-#define LOG_TAG "ExtCamDevSsn"
++#define LOG_TAG "AhdCamDevSsn"
+ // #define LOG_NDEBUG 0
+ #include <log/log.h>
+ 
+ #include "ExternalCameraDeviceSession.h"
++#include "CaptureIo.h"
+ 
+ #include <Exif.h>
+ #include <ExternalCameraOfflineSession.h>
+@@ -47,7 +48,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ namespace {
+ 
+@@ -146,12 +147,12 @@
+     }
+ 
+     struct v4l2_capability capability;
+-    int ret = ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &capability);
++    int ret = ::ahd::capture::control(mV4l2Fd.get(), VIDIOC_QUERYCAP, &capability);
+     std::string make, model;
+     if (ret < 0) {
+         ALOGW("%s v4l2 QUERYCAP failed", __FUNCTION__);
+-        mExifMake = "Generic UVC webcam";
+-        mExifModel = "Generic UVC webcam";
++        mExifMake = "AHD camera";
++        mExifModel = "AHD camera";
+     } else {
+         // capability.card is UTF-8 encoded
+         char card[32];
+@@ -165,8 +166,8 @@
+             }
+         }
+         if (j == 0 || card[j - 1] != '\0') {
+-            mExifMake = "Generic UVC webcam";
+-            mExifModel = "Generic UVC webcam";
++            mExifMake = "AHD camera";
++            mExifModel = "AHD camera";
+         } else {
+             mExifMake = card;
+             mExifModel = card;
+@@ -341,59 +342,13 @@
+         }
+     }
+ 
+-    // Now select a V4L2 format to produce all output streams
+-    float desiredAr = (mCroppingType == VERTICAL) ? kMaxAspectRatio : kMinAspectRatio;
+-    uint32_t maxDim = 0;
+-    for (const auto& stream : in_requestedConfiguration.streams) {
+-        float aspectRatio = ASPECT_RATIO(stream);
+-        ALOGI("%s: request stream %dx%d", __FUNCTION__, stream.width, stream.height);
+-        if ((mCroppingType == VERTICAL && aspectRatio < desiredAr) ||
+-            (mCroppingType == HORIZONTAL && aspectRatio > desiredAr)) {
+-            desiredAr = aspectRatio;
+-        }
+-
+-        // The dimension that's not cropped
+-        uint32_t dim = (mCroppingType == VERTICAL) ? stream.width : stream.height;
+-        if (dim > maxDim) {
+-            maxDim = dim;
+-        }
+-    }
+-
+-    // Find the smallest format that matches the desired aspect ratio and is wide/high enough
+-    SupportedV4L2Format v4l2Fmt{.width = 0, .height = 0};
+-    for (const auto& fmt : mSupportedFormats) {
+-        uint32_t dim = (mCroppingType == VERTICAL) ? fmt.width : fmt.height;
+-        if (dim >= maxDim) {
+-            float aspectRatio = ASPECT_RATIO(fmt);
+-            if (isAspectRatioClose(aspectRatio, desiredAr)) {
+-                v4l2Fmt = fmt;
+-                // since mSupportedFormats is sorted by width then height, the first matching fmt
+-                // will be the smallest one with matching aspect ratio
+-                break;
+-            }
+-        }
+-    }
+-
+-    if (v4l2Fmt.width == 0) {
+-        // Cannot find exact good aspect ratio candidate, try to find a close one
+-        for (const auto& fmt : mSupportedFormats) {
+-            uint32_t dim = (mCroppingType == VERTICAL) ? fmt.width : fmt.height;
+-            if (dim >= maxDim) {
+-                float aspectRatio = ASPECT_RATIO(fmt);
+-                if ((mCroppingType == VERTICAL && aspectRatio < desiredAr) ||
+-                    (mCroppingType == HORIZONTAL && aspectRatio > desiredAr)) {
+-                    v4l2Fmt = fmt;
+-                    break;
+-                }
+-            }
+-        }
+-    }
+-
+-    if (v4l2Fmt.width == 0) {
+-        ALOGE("%s: unable to find a resolution matching (%s at least %d, aspect ratio %f)",
+-              __FUNCTION__, (mCroppingType == VERTICAL) ? "width" : "height", maxDim, desiredAr);
+-        return fromStatus(Status::ILLEGAL_ARGUMENT);
+-    }
++    // Keep the decoder's full native field of view. Output resolution changes
++    // are crop/scale operations below, not a smaller CIF capture window.
++    if (mSupportedFormats.empty()) return fromStatus(Status::ILLEGAL_ARGUMENT);
++    const auto v4l2Fmt = *std::max_element(mSupportedFormats.begin(),mSupportedFormats.end(),
++        [](const auto& a,const auto& b) {
++            return static_cast<int64_t>(a.width)*a.height < static_cast<int64_t>(b.width)*b.height;
++        });
+ 
+     if (configureV4l2StreamLocked(v4l2Fmt) != 0) {
+         ALOGE("V4L configuration failed!, format:%c%c%c%c, w %d, h %d", v4l2Fmt.fourcc & 0xFF,
+@@ -1060,7 +1015,7 @@
+     }
+ 
+     // VIDIOC_S_FMT w/h/fmt
+-    v4l2_format fmt;
++    v4l2_format fmt{};
+     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+     fmt.fmt.pix.width = v4l2Fmt.width;
+     fmt.fmt.pix.height = v4l2Fmt.height;
+@@ -1069,7 +1024,7 @@
+     {
+         int numAttempt = 0;
+         do {
+-            ret = TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_S_FMT, &fmt));
++            ret = TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_S_FMT, &fmt));
+             if (numAttempt == MAX_RETRY) {
+                 break;
+             }
+@@ -1134,6 +1089,7 @@
+         return fpsRet;
+     }
+ 
++    mV4l2StreamingFps = fps; // Fixed-rate decoder: G/S_PARM may be unsupported.
+     uint32_t v4lBufferCount = (fps >= kDefaultFps) ? mCfg.numVideoBuffers : mCfg.numStillBuffers;
+ 
+     // VIDIOC_REQBUFS: create buffers
+@@ -1141,7 +1097,7 @@
+     req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+     req_buffers.memory = V4L2_MEMORY_MMAP;
+     req_buffers.count = v4lBufferCount;
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
+         ALOGE("%s: VIDIOC_REQBUFS failed: %s", __FUNCTION__, strerror(errno));
+         return -errno;
+     }
+@@ -1160,12 +1116,12 @@
+         v4l2_buffer buffer = {
+                 .index = i, .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP};
+ 
+-        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QUERYBUF, &buffer)) < 0) {
++        if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_QUERYBUF, &buffer)) < 0) {
+             ALOGE("%s: QUERYBUF %d failed: %s", __FUNCTION__, i, strerror(errno));
+             return -errno;
+         }
+ 
+-        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
++        if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
+             ALOGE("%s: QBUF %d failed: %s", __FUNCTION__, i, strerror(errno));
+             return -errno;
+         }
+@@ -1176,7 +1132,7 @@
+         v4l2_buf_type capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+         int numAttempt = 0;
+         do {
+-            ret = TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_STREAMON, &capture_type));
++            ret = TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_STREAMON, &capture_type));
+             if (numAttempt == MAX_RETRY) {
+                 break;
+             }
+@@ -1197,12 +1153,12 @@
+         v4l2_buffer buffer{};
+         buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+         buffer.memory = V4L2_MEMORY_MMAP;
+-        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
++        if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
+             ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
+             return -errno;
+         }
+ 
+-        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
++        if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
+             ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__, buffer.index, strerror(errno));
+             return -errno;
+         }
+@@ -1236,7 +1192,7 @@
+     v4l2_buffer buffer{};
+     buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+     buffer.memory = V4L2_MEMORY_MMAP;
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
+         ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
+         return ret;
+     }
+@@ -1272,9 +1228,11 @@
+         mNumDequeuedV4l2Buffers++;
+     }
+ 
+-    return std::make_unique<V4L2Frame>(mV4l2StreamingFmt.width, mV4l2StreamingFmt.height,
++    auto frame = std::make_unique<V4L2Frame>(mV4l2StreamingFmt.width, mV4l2StreamingFmt.height,
+                                        mV4l2StreamingFmt.fourcc, buffer.index, mV4l2Fd.get(),
+                                        buffer.bytesused, buffer.m.offset);
++    frame->mStride = ::ahd::capture::stride(mV4l2Fd.get());
++    return frame;
+ }
+ 
+ void ExternalCameraDeviceSession::enqueueV4l2Frame(const std::shared_ptr<V4L2Frame>& frame) {
+@@ -1285,7 +1243,7 @@
+     buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+     buffer.memory = V4L2_MEMORY_MMAP;
+     buffer.index = frame->mBufferIndex;
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
+         ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__, frame->mBufferIndex, strerror(errno));
+         return;
+     }
+@@ -1424,7 +1382,7 @@
+ 
+     // VIDIOC_STREAMOFF
+     v4l2_buf_type capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_STREAMOFF, &capture_type)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_STREAMOFF, &capture_type)) < 0) {
+         ALOGE("%s: STREAMOFF failed: %s", __FUNCTION__, strerror(errno));
+         return -errno;
+     }
+@@ -1434,7 +1392,7 @@
+     req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+     req_buffers.memory = V4L2_MEMORY_MMAP;
+     req_buffers.count = 0;
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
+         ALOGE("%s: REQBUFS failed: %s", __FUNCTION__, strerror(errno));
+         return -errno;
+     }
+@@ -1447,10 +1405,11 @@
+     // VIDIOC_G_PARM/VIDIOC_S_PARM: set fps
+     v4l2_streamparm streamparm = {.type = V4L2_BUF_TYPE_VIDEO_CAPTURE};
+     // The following line checks that the driver knows about framerate get/set.
+-    int ret = TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_G_PARM, &streamparm));
++    int ret = TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_G_PARM, &streamparm));
+     if (ret != 0) {
+-        if (errno == -EINVAL) {
+-            ALOGW("%s: device does not support VIDIOC_G_PARM", __FUNCTION__);
++        if (errno == EINVAL || errno == ENOTTY) {
++            ALOGW("%s: fixed-rate capture does not support VIDIOC_G_PARM", __FUNCTION__);
++            return -EINVAL;
+         }
+         return -errno;
+     }
+@@ -1465,9 +1424,9 @@
+     streamparm.parm.capture.timeperframe.numerator = kFrameRatePrecision;
+     streamparm.parm.capture.timeperframe.denominator = (fps * kFrameRatePrecision);
+ 
+-    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_S_PARM, &streamparm)) < 0) {
++    if (TEMP_FAILURE_RETRY(::ahd::capture::control(mV4l2Fd.get(), VIDIOC_S_PARM, &streamparm)) < 0) {
+         ALOGE("%s: failed to set framerate to %f: %s", __FUNCTION__, fps, strerror(errno));
+-        return -1;
++        return -errno;
+     }
+ 
+     double retFps = streamparm.parm.capture.timeperframe.denominator /
+@@ -2740,7 +2699,7 @@
+         return false;
+     };
+ 
+-    if (req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16) {
++    if (req->frameIn->mFourcc != V4L2_PIX_FMT_NV12 && req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16) {
+         return onDeviceError("%s: do not support V4L2 format %c%c%c%c", __FUNCTION__,
+                              req->frameIn->mFourcc & 0xFF, (req->frameIn->mFourcc >> 8) & 0xFF,
+                              (req->frameIn->mFourcc >> 16) & 0xFF,
+@@ -2787,8 +2746,26 @@
+         }
+     }
+ 
++    if (req->frameIn->mFourcc == V4L2_PIX_FMT_NV12 && !mCameraMuted) {
++        const size_t stride = req->frameIn->mStride ? req->frameIn->mStride : req->frameIn->mWidth;
++        const size_t height = req->frameIn->mHeight;
++        if (stride < static_cast<size_t>(req->frameIn->mWidth) ||
++            height > SIZE_MAX / stride || inDataSize < stride * height + stride * ((height + 1) / 2)) {
++            lk.unlock();
++            return onDeviceError("%s", "NV12 buffer is smaller than its negotiated layout");
++        }
++        if (libyuv::NV12ToI420(inData, stride, inData + stride * height, stride,
++                static_cast<uint8_t*>(mYu12FrameLayout.y), mYu12FrameLayout.yStride,
++                static_cast<uint8_t*>(mYu12FrameLayout.cb), mYu12FrameLayout.cStride,
++                static_cast<uint8_t*>(mYu12FrameLayout.cr), mYu12FrameLayout.cStride,
++                req->frameIn->mWidth, req->frameIn->mHeight) != 0) {
++            lk.unlock();
++            return onDeviceError("%s", "NV12 conversion failed");
++        }
++    }
++
+     // TODO: in some special case maybe we can decode jpg directly to gralloc output?
+-    if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
++    if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG || mCameraMuted) {
+         ATRACE_BEGIN("MJPGtoI420");
+         res = 0;
+         if (mCameraMuted) {
+--- a/ExternalCameraDeviceSession.h
++++ b/ExternalCameraDeviceSession.h
+@@ -36,7 +36,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::common::Status;
+ using ::aidl::android::hardware::camera::device::BnCameraDeviceSession;
+@@ -56,8 +56,8 @@
+ using ::android::AidlMessageQueue;
+ using ::android::base::unique_fd;
+ using ::android::hardware::camera::common::helper::SimpleThread;
+-using ::android::hardware::camera::external::common::ExternalCameraConfig;
+-using ::android::hardware::camera::external::common::SizeHasher;
++using ::android::hardware::camera::ahd_external::common::ExternalCameraConfig;
++using ::android::hardware::camera::ahd_external::common::SizeHasher;
+ using ::android::hardware::graphics::mapper::V2_0::YCbCrLayout;
+ using ::ndk::ScopedAStatus;
+ 
+@@ -122,7 +122,7 @@
+ 
+     static const int kMaxProcessedStream = 2;
+     static const int kMaxStallStream = 1;
+-    static const uint32_t kMaxBytesPerPixel = 2;
++    static const uint32_t kMaxBytesPerPixel = 4;
+ 
+     class BufferRequestThread : public SimpleThread {
+       public:
+--- a/ExternalCameraOfflineSession.cpp
++++ b/ExternalCameraOfflineSession.cpp
+@@ -14,7 +14,7 @@
+  * limitations under the License.
+  */
+ 
+-#define LOG_TAG "ExtCamOfflnSsn"
++#define LOG_TAG "AhdCamOfflnSsn"
+ #include <android/log.h>
+ 
+ #include "ExternalCameraOfflineSession.h"
+@@ -43,7 +43,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::device::BufferStatus;
+ using ::aidl::android::hardware::camera::device::ErrorMsg;
+@@ -389,7 +389,7 @@
+         return false;
+     };
+ 
+-    if (req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16) {
++    if (req->frameIn->mFourcc != V4L2_PIX_FMT_NV12 && req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16) {
+         return onDeviceError("%s: do not support V4L2 format %c%c%c%c", __FUNCTION__,
+                              req->frameIn->mFourcc & 0xFF, (req->frameIn->mFourcc >> 8) & 0xFF,
+                              (req->frameIn->mFourcc >> 16) & 0xFF,
+@@ -410,6 +410,24 @@
+     if (req->frameIn->getData(&inData, &inDataSize) != 0) {
+         lk.unlock();
+         return onDeviceError("%s: V4L2 buffer map failed", __FUNCTION__);
++    }
++
++    if (req->frameIn->mFourcc == V4L2_PIX_FMT_NV12) {
++        const size_t stride = req->frameIn->mStride ? req->frameIn->mStride : req->frameIn->mWidth;
++        const size_t height = req->frameIn->mHeight;
++        if (stride < static_cast<size_t>(req->frameIn->mWidth) ||
++            height > SIZE_MAX / stride || inDataSize < stride * height + stride * ((height + 1) / 2)) {
++            lk.unlock();
++            return onDeviceError("%s", "NV12 buffer is smaller than its negotiated layout");
++        }
++        if (libyuv::NV12ToI420(inData, stride, inData + stride * height, stride,
++                static_cast<uint8_t*>(mYu12FrameLayout.y), mYu12FrameLayout.yStride,
++                static_cast<uint8_t*>(mYu12FrameLayout.cb), mYu12FrameLayout.cStride,
++                static_cast<uint8_t*>(mYu12FrameLayout.cr), mYu12FrameLayout.cStride,
++                req->frameIn->mWidth, req->frameIn->mHeight) != 0) {
++            lk.unlock();
++            return onDeviceError("%s", "NV12 conversion failed");
++        }
+     }
+ 
+     // TODO: in some special case maybe we can decode jpg directly to gralloc output?
+--- a/ExternalCameraOfflineSession.h
++++ b/ExternalCameraOfflineSession.h
+@@ -30,7 +30,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::common::Status;
+ using ::aidl::android::hardware::camera::device::BnCameraOfflineSession;
+--- a/ExternalCameraUtils.cpp
++++ b/ExternalCameraUtils.cpp
+@@ -14,7 +14,7 @@
+  * limitations under the License.
+  */
+ 
+-#define LOG_TAG "ExtCamUtils"
++#define LOG_TAG "AhdCamUtils"
+ // #define LOG_NDEBUG 0
+ 
+ #include "ExternalCameraUtils.h"
+@@ -34,7 +34,7 @@
+ namespace hardware {
+ namespace camera {
+ 
+-namespace external {
++namespace ahd_external {
+ namespace common {
+ 
+ namespace {
+@@ -46,7 +46,7 @@
+                                     // For phone devices 270 is better
+ }  // anonymous namespace
+ 
+-const char* ExternalCameraConfig::kDefaultCfgPath = "/vendor/etc/external_camera_config.xml";
++const char* ExternalCameraConfig::kDefaultCfgPath = "/vendor/etc/ahd_camera/limits.xml";
+ 
+ ExternalCameraConfig ExternalCameraConfig::loadFromCfg(const char* cfgPath) {
+     using namespace tinyxml2;
+@@ -221,10 +221,7 @@
+       numStillBuffers(kDefaultNumStillBuffer),
+       depthEnabled(false),
+       orientation(kDefaultOrientation) {
+-    fpsLimits.push_back({/* size */ {/* width */ 640, /* height */ 480}, /* fpsUpperBound */ 30.0});
+-    fpsLimits.push_back({/* size */ {/* width */ 1280, /* height */ 720}, /* fpsUpperBound */ 7.5});
+-    fpsLimits.push_back(
+-            {/* size */ {/* width */ 1920, /* height */ 1080}, /* fpsUpperBound */ 5.0});
++    fpsLimits.push_back({{INT32_MAX, INT32_MAX}, std::numeric_limits<double>::max()});
+     minStreamSize = {0, 0};
+ }
+ 
+@@ -232,7 +229,7 @@
+ }  // namespace external
+ 
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ double SupportedV4L2Format::FrameRate::getFramesPerSecond() const {
+     return static_cast<double>(durationDenominator) / durationNumerator;
+@@ -826,6 +823,7 @@
+ 
+ AllocatedV4L2Frame::AllocatedV4L2Frame(std::shared_ptr<V4L2Frame> frameIn)
+     : Frame(frameIn->mWidth, frameIn->mHeight, frameIn->mFourcc) {
++    mStride = frameIn->mStride;
+     uint8_t* dataIn;
+     size_t dataSize;
+     if (frameIn->getData(&dataIn, &dataSize) != 0) {
+--- a/ExternalCameraUtils.h
++++ b/ExternalCameraUtils.h
+@@ -48,7 +48,7 @@
+ namespace hardware {
+ namespace camera {
+ 
+-namespace external {
++namespace ahd_external {
+ namespace common {
+ 
+ struct Size {
+@@ -75,6 +75,7 @@
+ 
+     // CameraId base offset for numerical representation
+     uint32_t cameraIdOffset;
++    int32_t resourceCost = 100;
+ 
+     // List of internal V4L2 video nodes external camera HAL must ignore.
+     std::unordered_set<std::string> mInternalDevices;
+@@ -116,7 +117,7 @@
+ }  // namespace external
+ 
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ struct SupportedV4L2Format {
+     int32_t width;
+@@ -142,6 +143,7 @@
+     const int32_t mWidth;
+     const int32_t mHeight;
+     const uint32_t mFourcc;
++    uint32_t mStride = 0;
+ 
+     // getData might involve map/allocation
+     virtual int getData(uint8_t** outData, size_t* dataSize) = 0;
+@@ -242,7 +244,7 @@
+ // returns FLEX_YUV_GENERIC for formats other than YV12/YU12/NV12/NV21
+ uint32_t getFourCcFromLayout(const YCbCrLayout&);
+ 
+-using ::android::hardware::camera::external::common::Size;
++using ::android::hardware::camera::ahd_external::common::Size;
+ int getCropRect(CroppingType ct, const Size& inSize, const Size& outSize, IMapper::Rect* out);
+ 
+ int formatConvert(const YCbCrLayout& in, const YCbCrLayout& out, Size sz, uint32_t format);
+--- a/convert.cpp
++++ b/convert.cpp
+@@ -27,7 +27,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::device::ErrorCode;
+ using ::aidl::android::hardware::camera::device::ErrorMsg;
+--- a/convert.h
++++ b/convert.h
+@@ -30,7 +30,7 @@
+ namespace hardware {
+ namespace camera {
+ namespace device {
+-namespace implementation {
++namespace ahd_implementation {
+ 
+ using ::aidl::android::hardware::camera::common::Status;
+ using ::aidl::android::hardware::camera::device::BufferStatus;

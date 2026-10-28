@@ -17,7 +17,4 @@ data class TileStatus(
     val failures: Long = 0,
     val streaming: Boolean = false,
     val processMs: Float? = null,
-    val skippedFrames: Long = 0,
-    val inputFps: Float = 0f,
-    val rateControllable: Boolean = false,
 )

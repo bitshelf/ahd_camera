@@ -23,16 +23,17 @@ import io.github.ahdcamera.camera.CameraInfo
 import kotlinx.coroutines.launch
 
 @Composable
-fun CameraSelectionList(cameras: List<CameraInfo>, selected: Set<String>, onToggle: (String) -> Unit) {
+fun CameraSelectionList(cameras: List<CameraInfo>, selected: Set<String>, onToggle: (String) -> Unit, canSelect: (String) -> Boolean = { true }) {
     val state = rememberLazyListState()
     Box(Modifier.heightIn(max = 420.dp)) {
         LazyColumn(state = state, modifier = Modifier.fillMaxWidth().padding(end = 16.dp)) {
             items(cameras, key = { it.id }, contentType = { "camera" }) { camera ->
+                val enabled = camera.id in selected || canSelect(camera.id)
                 Row(
-                    Modifier.fillMaxWidth().clickable { onToggle(camera.id) }.padding(vertical = 8.dp),
+                    Modifier.fillMaxWidth().clickable(enabled = enabled) { onToggle(camera.id) }.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(camera.id in selected, onCheckedChange = { onToggle(camera.id) })
+                    Checkbox(camera.id in selected, enabled = enabled, onCheckedChange = { onToggle(camera.id) })
                     Column {
                         Text(camera.id, fontWeight = FontWeight.Bold)
                         Text(camera.facing, style = MaterialTheme.typography.bodySmall)

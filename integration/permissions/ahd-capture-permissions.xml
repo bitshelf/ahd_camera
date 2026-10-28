@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<permissions>
-    <!-- Only the platform-signed AHD app's signature permission supplies this GID. -->
-    <permission name="io.github.ahdcamera.permission.CAPTURE_AHD">
-        <group gid="camera" />
-    </permission>
-</permissions>

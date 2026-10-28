@@ -1,0 +1,8 @@
+<ExternalCamera>
+    <Provider><ignore /></Provider>
+    <Device>
+        <NumVideoBuffers count="4" />
+        <NumStillBuffers count="4" />
+        <Orientation degree="0" />
+    </Device>
+</ExternalCamera>

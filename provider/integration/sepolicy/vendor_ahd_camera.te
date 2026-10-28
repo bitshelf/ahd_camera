@@ -1,0 +1,31 @@
+# Own process and Binder service; existing HAL domains are not changed.
+type vendor_ahd_camera, domain;
+type vendor_ahd_camera_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_ahd_camera)
+hal_server_domain(vendor_ahd_camera, hal_camera)
+hal_client_domain(vendor_ahd_camera, hal_graphics_allocator)
+
+# Keep all existing video/media/subdev labels unchanged. The new HAL inherits
+# the standard camera server's device permissions; software ownership checks
+# are required before any capture setup.
+allowxperm vendor_ahd_camera video_device:chr_file ioctl {
+    0x5600 0x5602 0x5604 0x5605 0x5608 0x5609 0x560f 0x5611
+    0x5612 0x5613 0x5615 0x5616 0x5640 0x564a 0x564b 0x7c04
+};
+
+# Read-only decoder identity check. Capture code never changes media links/subdev formats.
+allow vendor_ahd_camera sysfs:dir r_dir_perms;
+allow vendor_ahd_camera sysfs:file r_file_perms;
+allow vendor_ahd_camera sysfs:lnk_file read;
+allow vendor_ahd_camera sysfs_dev:dir r_dir_perms;
+allow vendor_ahd_camera sysfs_dev:file r_file_perms;
+
+# Standard gralloc HAL buffer transport; no RGA, ISP or vendor codec access.
+allow vendor_ahd_camera hal_graphics_mapper_hwservice:hwservice_manager find;
+allow vendor_ahd_camera hal_graphics_allocator:fd use;
+get_prop(vendor_ahd_camera, graphics_config_prop)
+get_prop(vendor_ahd_camera, device_config_camera_native_prop)
+
+allow vendor_ahd_camera gpu_device:dir r_dir_perms;
+allow vendor_ahd_camera gpu_device:chr_file rw_file_perms;
+get_prop(vendor_ahd_camera, graphics_config_writable_prop)

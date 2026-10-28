@@ -21,12 +21,13 @@ outside composables. Use indexed format placeholders and plurals for quantities.
 Never embed Chinese UI messages in Kotlin, Java, or Rust. Technical device names,
 protocol values and diagnostic details may remain untranslated.
 
-Validate the Rust V4L2/RGA core and Kotlin UI on this branch. Camera2 implementations
-remain on their own branches. The user now requests platform signing and system-app integration. Preserve enforcing
-SELinux and existing HAL/framework source; signing must not be treated as overriding
-neverallow rules. Keep board deployment policy separate from application code. Keep
-Soong and Gradle builds compatible. Do not overwrite another machine's source or
-its uncommitted resources when consulting the original project.
+This branch implements UI, Camera2 capture and MediaCodec recording in Kotlin.
+The App must not introduce Rust, C++, JNI or direct device access. The optional
+independent system Provider under provider/ is authorized; keep its capture core,
+versioned AIDL adapter and board integration separate. Never modify existing
+USB/MIPI HAL or framework source. Use public Camera2 capabilities in the App; never
+invent concurrency, resolution or FPS support. Keep Soong and Gradle compatible.
+Do not overwrite another machine's source or its uncommitted resources.
 
 UI changes must keep `docs/AHD_Camera_Interactive_Prototype.html` and the native
 Compose presentation synchronized in the same change. Follow `docs/ui-prototype.md`

@@ -16,8 +16,8 @@
     <string name="select_hint">Select multiple cameras and record each stream independently.</string>
     <string name="select_cameras">Select cameras</string>
     <string name="camera_count">Cameras / %1$d</string>
-    <string name="direct_capture_hint">Device nodes are listed here. Capture capabilities are negotiated with the driver and shown in each preview.</string>
-    <string name="concurrent_hint">Select capture nodes. Simultaneous streams depend on available device and processing resources.</string>
+    <string name="direct_capture_hint">Cameras and stream options are reported by Android Camera2.</string>
+    <string name="concurrent_hint">Concurrent previews require a camera combination supported by this device. Unsupported selections are disabled.</string>
     <string name="remove_disconnected">Remove disconnected selections</string>
     <string name="done">Done</string>
     <string name="refresh_devices">Refresh devices</string>
@@ -67,8 +67,6 @@
     <string name="scan_failed">Device scan failed: %1$s</string>
     <string name="status_read_failed">Could not read status: %1$s</string>
     <string name="opening_device">Opening device</string>
-    <string name="native_capture_failed">Native capture initialization failed</string>
-    <string name="native_library_failed">Could not load native library: %1$s</string>
     <string name="no_hardware_encoder">No hardware H.264 encoder supports %1$d×%2$d at %3$d fps</string>
     <string name="encoder_surface_unsupported">The encoder does not support surface input</string>
     <string name="recording_create_failed">Could not create the recording file</string>
@@ -91,14 +89,12 @@
     <string name="frame_rate">%1$d fps</string>
     <string name="compact_frame_rate">%1$.1f fps</string>
     <string name="expand_camera">Expand camera %1$s</string>
-    <string name="device_access_denied">Cannot list camera device nodes. Check the firmware permissions and SELinux policy for this app.</string>
     <plurals name="selected_cameras">
         <item quantity="one">%1$d camera selected</item>
         <item quantity="other">%1$d cameras selected</item>
     </plurals>
-    <string name="native_initializing">Initializing V4L2 / RGA</string>
-    <string name="native_stopped">Stopped</string>
-    <string name="native_capture_error">Capture error: %1$s</string>
+    <string name="capture_stopped">Stopped</string>
+    <string name="capture_error">Capture error: %1$s</string>
     <string name="layout_rows">Rows</string>
     <string name="layout_columns">Columns</string>
     <string name="capture_resolution">Capture resolution</string>
@@ -116,12 +112,6 @@
     <string name="tap_camera_controls">Tap a camera to show or hide its resolution and frame rate controls.</string>
     <string name="camera_controls">Camera %1$s controls</string>
     <string name="hide_controls">Hide controls</string>
-    <string name="native_node_unavailable">Device unavailable: %1$s</string>
-    <string name="native_node_permissions">Cannot query %1$d video nodes. Device access requires deployment permissions; granting CAMERA alone is insufficient.</string>
-    <string name="native_opening">Opening V4L2 device</string>
-    <string name="native_streaming">V4L2 · RGA · GLES</string>
-    <string name="native_skipped_frames">%1$d skipped frames</string>
-    <string name="native_scan_denied">Cannot enumerate /dev: device access is denied. Platform signing alone does not grant capture permissions.</string>
     <string name="display_settings">Display</string>
     <string name="language">Language</string>
     <string name="language_system">Follow system</string>
@@ -142,6 +132,6 @@
     <string name="appearance">Appearance</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
-    <string name="about_description">AHD Camera · Multi-camera V4L2 preview and recording.</string>
+    <string name="about_description">AHD Camera · Camera2 preview and recording · Kotlin.</string>
     <string name="add_camera_hint">Tap to add a camera</string>
 </resources>

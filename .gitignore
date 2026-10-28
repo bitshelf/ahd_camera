@@ -9,7 +9,6 @@ local.properties
 captures/
 target/*
 !target/.find-ignore
-app/src/rockchip/jniLibs/
 dist/
 
 # Local AI development skills and upstream Git checkout.
@@ -17,5 +16,3 @@ dist/
 
 # Local checkout of official Android skills.
 /skills/
-
-/app/src/main/jniLibs/

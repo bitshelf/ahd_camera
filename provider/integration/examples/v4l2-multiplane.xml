@@ -1,0 +1,9 @@
+<!-- Example only: verify node identities, decoder name/pads and pixel budget on each product. -->
+<AhdCameraProvider maxConcurrent="3" maxPixelRate="155520000" resourceCost="100">
+    <Camera id="ahd-0" path="/dev/video11" driver="rkcif" card="rkcif" bus="platform:rkcif-mipi-lvds1"
+        mediaNode="/dev/media1" timingNode="/dev/v4l-subdev5" timingName="m00_b_techpoint 4-0044" timingPad="0" />
+    <Camera id="ahd-1" path="/dev/video12" driver="rkcif" card="rkcif" bus="platform:rkcif-mipi-lvds1"
+        mediaNode="/dev/media1" timingNode="/dev/v4l-subdev5" timingName="m00_b_techpoint 4-0044" timingPad="1" />
+    <Camera id="ahd-2" path="/dev/video13" driver="rkcif" card="rkcif" bus="platform:rkcif-mipi-lvds1"
+        mediaNode="/dev/media1" timingNode="/dev/v4l-subdev5" timingName="m00_b_techpoint 4-0044" timingPad="2" />
+</AhdCameraProvider>

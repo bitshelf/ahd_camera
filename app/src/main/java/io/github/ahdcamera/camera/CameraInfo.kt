@@ -9,5 +9,4 @@ data class CameraInfo(
     val orientation: Int,
     val front: Boolean,
     val minFrameDurations: Map<StreamSize, Long> = emptyMap(),
-    val fpsBySize: Map<StreamSize, List<Pair<Int, Int>>> = emptyMap(),
 )

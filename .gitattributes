@@ -6,3 +6,5 @@ integration/device/*.patch -whitespace
 integration/device/patches/*.patch -whitespace
 
 integration/patches/*.patch -whitespace
+
+provider/compat/*/changes.patch -whitespace

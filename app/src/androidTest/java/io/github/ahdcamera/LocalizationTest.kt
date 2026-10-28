@@ -3,7 +3,6 @@ package io.github.ahdcamera
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.LocaleList
-import io.github.ahdcamera.camera.NativeBridge
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -12,11 +11,6 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LocalizationTest {
-    @Test fun rustV4l2BridgeLoadsAndAcceptsAnUnknownClosedHandle() {
-        assertEquals("stopped|0|0|0|-1|2", NativeBridge.status(0))
-        NativeBridge.stop(0)
-    }
-
     private fun resources(language: String): Resources {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val configuration = Configuration(context.resources.configuration).apply {

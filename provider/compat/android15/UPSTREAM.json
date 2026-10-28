@@ -1,0 +1,16 @@
+{
+  "repository": "https://android.googlesource.com/platform/hardware/interfaces",
+  "revision": "373cc976afd6b9cbd3360cf436dabc7549012cfd",
+  "files": {
+    "camera/device/default/ExternalCameraDevice.cpp": "b5e06cb829ef1e128e1d2b1dfe2c4b0f9595a81b7fee77650772c97002aa8405",
+    "camera/device/default/ExternalCameraDevice.h": "e3002d7dd4ef17ef78bc8e0e8d2efabcd0556f1e464ddb6d5c80b49f52eb1b42",
+    "camera/device/default/ExternalCameraDeviceSession.cpp": "ad244a82e627e5d5dbf708b77a39a46297c22bf206b89bddb2aa67f7e290b82c",
+    "camera/device/default/ExternalCameraDeviceSession.h": "2329018909e0fff3c078242404757778247420ce533bbbe5a3fb4622c6bca760",
+    "camera/device/default/ExternalCameraOfflineSession.cpp": "c9c360c649fc6bf4cad07a82b0b3ac818b7929d04ead84433e4460a31166679a",
+    "camera/device/default/ExternalCameraOfflineSession.h": "e5944fc068d0eb727ace86cf9e38edc396f187e1ee493c1de2a7efeeddfe29c3",
+    "camera/device/default/ExternalCameraUtils.cpp": "ca922e01712972558935a39e77102972638305fb66ff21d66ce45d4e15a14259",
+    "camera/device/default/ExternalCameraUtils.h": "079723cf23be1fd9a65a15534bc723924e2c2e30edabe2a01c65cce84fed7671",
+    "camera/device/default/convert.cpp": "1adfd95d7e078369e14d3840dd6d15e1086cacfef95f34bed21fa4e68d7e27e3",
+    "camera/device/default/convert.h": "cb2bf7b305d75a247300dc480eacffaf819718e441bea067b235e5aa5b3756f8"
+  }
+}

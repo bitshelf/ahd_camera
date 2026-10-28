@@ -274,7 +274,7 @@ private fun WallScreen(
                         WallSection.Cameras -> {
                             Text(pluralStringResource(R.plurals.selected_cameras, selected.size, selected.size), style = MaterialTheme.typography.bodySmall)
                             Text(stringResource(R.string.concurrent_hint), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
-                            Box(Modifier.weight(1f, fill = false)) { CameraSelectionList(catalog.cameras, selected.toSet(), model::toggle) }
+                            Box(Modifier.weight(1f, fill = false)) { CameraSelectionList(catalog.cameras, selected.toSet(), model::toggle, model::canSelect) }
                             if (catalog.cameras.isEmpty()) Text(catalog.error ?: stringResource(R.string.no_cameras), style = MaterialTheme.typography.bodySmall)
                             if (selected.any { id -> catalog.cameras.none { it.id == id } }) TextButton(onClick = {
                                 selected.filter { id -> catalog.cameras.none { it.id == id } }.forEach(model::toggle)

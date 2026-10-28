@@ -1,0 +1,69 @@
+// Independent system component; no App JNI dependency or vendor-camera module override.
+cc_library_shared {
+    name: "libahd_capture_io",
+    vendor: true,
+    host_supported: true,
+    srcs: ["core/CaptureIo.cpp"],
+    export_include_dirs: ["core"],
+    shared_libs: ["libtinyxml2"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+    // The SDK host sysroot is glibc 2.17; use its current Linux media ABI header.
+    target: { host: { cflags: ["-include bionic/libc/kernel/uapi/linux/media.h"] } },
+    cpp_std: "c++17",
+}
+cc_library_shared {
+    name: "libahd_camera_android15",
+    vendor: true,
+    compile_multilib: "64",
+    defaults: ["android.hardware.graphics.common-ndk_shared", "hidl_defaults"],
+    srcs: ["compat/android15/*.cpp"],
+    export_include_dirs: ["compat/android15"],
+    static_libs: ["android.hardware.camera.common@1.0-helper", "libaidlcommonsupport"],
+    export_shared_lib_headers: ["libahd_capture_io"],
+    shared_libs: [
+        "libahd_capture_io", "android.hardware.camera.common-V1-ndk", "android.hardware.camera.device-V1-ndk",
+        "android.hardware.graphics.allocator-V2-ndk", "android.hardware.graphics.mapper@2.0",
+        "android.hardware.graphics.mapper@3.0", "android.hardware.graphics.mapper@4.0",
+        "android.hidl.allocator@1.0", "android.hidl.memory@1.0", "libbinder_ndk",
+        "libcamera_metadata", "libcutils", "libexif", "libfmq", "libgralloctypes",
+        "libhardware", "libhidlbase", "libhidlmemory", "libjpeg", "liblog",
+        "libsync", "libtinyxml2", "libutils", "libui", "libyuv",
+    ],
+    header_libs: ["media_plugin_headers"],
+    cpp_std: "c++17",
+}
+cc_binary {
+    name: "AhdCameraProvider",
+    stem: "ahd-camera-provider",
+    vendor: true,
+    compile_multilib: "64",
+    relative_install_path: "hw",
+    srcs: ["service/*.cpp"],
+    shared_libs: [
+        "libahd_capture_io", "libahd_camera_android15", "android.hardware.camera.provider-V1-ndk",
+        "android.hardware.camera.device-V1-ndk", "android.hardware.camera.common-V1-ndk",
+        "libbinder_ndk", "libcamera_metadata", "liblog", "libtinyxml2",
+        "libutils", "libhidlbase", "android.hardware.graphics.mapper@2.0",
+        "android.hardware.graphics.mapper@3.0", "android.hardware.graphics.mapper@4.0",
+        "libfmq",
+    ],
+    static_libs: ["android.hardware.camera.common@1.0-helper"],
+    init_rc: ["integration/ahd-camera-provider.rc"],
+    vintf_fragments: ["integration/ahd-camera-provider.xml"],
+    required: ["AhdCameraProviderLimits"],
+    cpp_std: "c++17",
+}
+prebuilt_etc {
+    name: "AhdCameraProviderLimits",
+    vendor: true,
+    src: "integration/limits.xml",
+    sub_dir: "ahd_camera",
+    filename: "limits.xml",
+}
+cc_test_host {
+    name: "ahd_capture_io_test",
+    cflags: ["-include bionic/libc/kernel/uapi/linux/media.h"],
+    srcs: ["tests/CaptureIoTest.cpp"],
+    shared_libs: ["libahd_capture_io"],
+    cpp_std: "c++17",
+}

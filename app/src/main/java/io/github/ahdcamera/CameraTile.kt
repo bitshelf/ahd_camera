@@ -61,7 +61,7 @@ internal fun CameraTile(
                 CameraActionChip(null, stringResource(if (recording) R.string.stop else R.string.record), true, size != null && fpsOptions.isNotEmpty() && status.streaming, onToggleRecording)
             }
             CameraControlsPanel(
-                size, fps, camera.sizes.distinct().sortedByDescending { it.area },
+                size, fps, camera.sizes.distinct().filter { StreamPolicy.supportedFps(listOf(camera), it).isNotEmpty() }.sortedByDescending { it.area },
                 fpsOptions, configurationLocked,
                 modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = if (underGlobal) 116.dp else 58.dp, end = 8.dp, start = 8.dp, bottom = 8.dp)
                     .widthIn(max = 366.dp).heightIn(max = (maxHeight - if (underGlobal) 132.dp else 74.dp).coerceAtLeast(40.dp)),
